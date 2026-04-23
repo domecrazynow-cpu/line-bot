@@ -1,4 +1,7 @@
 require("dotenv").config();
+
+console.log("ENV CHECK:", process.env.OPENAI_API_KEY ? "OK" : "MISSING");
+
 const express = require("express");
 const axios = require("axios");
 const OpenAI = require("openai");
