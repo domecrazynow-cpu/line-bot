@@ -1,36 +1,35 @@
 require("dotenv").config();
 
-console.log("ENV CHECK:", process.env.OPENAI_API_KEY ? "OK" : "MISSING");
-
 const express = require("express");
 const axios = require("axios");
 const OpenAI = require("openai");
 
-  const app = express();
-  app.use(express.json());
+const app = express();
+app.use(express.json());
 
 const LINE_TOKEN = process.env.LINE_TOKEN;
+const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434/v1";
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3.2";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+const ai = new OpenAI({
+  baseURL: OLLAMA_URL,
+  apiKey: "ollama",
 });
 
-  app.get("/", (req, res) => {
-    res.send("Bot is running");
-  });
+app.get("/", (req, res) => {
+  res.send("Bot is running");
+});
 
-  app.post("/webhook", async (req, res) => {
-    try {
-      const events = req.body.events;
+app.post("/webhook", async (req, res) => {
+  try {
+    const events = req.body.events;
 
     for (let event of events) {
       if (event.type === "message" && event.message.type === "text") {
-
         const userMsg = event.message.text;
 
-        // 🤖 เรียก ChatGPT
-        const aiRes = await openai.chat.completions.create({
-          model: "gpt-4o-mini",
+        const aiRes = await ai.chat.completions.create({
+          model: OLLAMA_MODEL,
           messages: [
             {
               role: "system",
