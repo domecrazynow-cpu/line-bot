@@ -30,6 +30,7 @@
 
 1. Install ngrok:  winget install Ngrok.Ngrok
 2. New terminal:   ngrok http 3000
+    - if not work run `ngrok update` to use new version
 3. Copy the https URL → LINE Console → Messaging API
    → Webhook URL = <ngrok URL>/webhook → Update → Verify → enable "Use webhook"
 4. Disable "Auto-reply messages" in LINE Console
