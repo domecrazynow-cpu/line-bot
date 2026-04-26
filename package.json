@@ -7,9 +7,12 @@
     "dev": "nodemon index.js"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "axios": "^1.6.0",
+    "canvas": "^3.2.3",
     "dotenv": "^17.4.1",
     "express": "^4.18.2",
+    "multer": "^2.1.1",
     "nodemon": "^3.1.14",
     "openai": "^6.34.0"
   }

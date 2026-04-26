@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Team Dashboard — Travel Bot</title>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:       #080b12;
+  --surface:  #0f1420;
+  --card:     #141926;
+  --border:   #1e2535;
+  --accent:   #06C755;
+  --accent2:  #00aaff;
+  --warn:     #ff4d6d;
+  --gold:     #f5a623;
+  --purple:   #9b59b6;
+  --text:     #e8edf5;
+  --muted:    #5a6380;
+  --radius:   12px;
+  --font:     'Kanit', sans-serif;
+  --mono:     'IBM Plex Mono', monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-weight: 300;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── Login Screen ── */
+#login-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(ellipse at 50% 0%, #06C75520 0%, transparent 70%);
+}
+.login-box {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 48px 40px;
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+}
+.login-logo {
+  font-size: 48px;
+  margin-bottom: 16px;
+  display: block;
+}
+.login-box h1 {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.login-box p {
+  color: var(--muted);
+  font-size: 14px;
+  margin-bottom: 32px;
+}
+.login-input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  font-family: var(--font);
+  font-size: 16px;
+  color: var(--text);
+  outline: none;
+  text-align: center;
+  letter-spacing: 4px;
+  margin-bottom: 16px;
+  transition: border-color .2s;
+}
+.login-input:focus { border-color: var(--accent); }
+.login-btn {
+  width: 100%;
+  padding: 14px;
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: 10px;
+  font-family: var(--font);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity .2s;
+}
+.login-btn:hover { opacity: .85; }
+.login-error { color: var(--warn); font-size: 13px; margin-top: 12px; display: none; }
+
+/* ── Main Layout ── */
+#app { display: none; }
+
+.sidebar {
+  position: fixed;
+  left: 0; top: 0; bottom: 0;
+  width: 240px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 24px 0;
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+}
+.sidebar-logo {
+  padding: 0 24px 24px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+.sidebar-logo .icon { font-size: 28px; display: block; margin-bottom: 4px; }
+.sidebar-logo h2 { font-size: 16px; font-weight: 600; }
+.sidebar-logo span { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 24px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 400;
+  transition: all .15s;
+  border-left: 3px solid transparent;
+}
+.nav-item:hover { color: var(--text); background: var(--card); }
+.nav-item.active { color: var(--accent); border-left-color: var(--accent); background: var(--card); font-weight: 500; }
+.nav-item .icon { font-size: 18px; width: 24px; text-align: center; }
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--muted);
+  font-family: var(--mono);
+}
+.online-dot {
+  display: inline-block;
+  width: 8px; height: 8px;
+  background: var(--accent);
+  border-radius: 50%;
+  margin-right: 6px;
+  animation: pulse 2s infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+.main {
+  margin-left: 240px;
+  padding: 32px;
+  min-height: 100vh;
+}
+
+.page { display: none; }
+.page.active { display: block; animation: fadeIn .25s ease; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+
+.page-header {
+  margin-bottom: 28px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.page-header h1 { font-size: 26px; font-weight: 600; }
+.page-header p { color: var(--muted); font-size: 14px; margin-top: 4px; }
+
+/* ── Cards ── */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin-bottom: 20px;
+}
+.card-title {
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Stats ── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.stat-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--c, var(--accent));
+}
+.stat-card .num { font-size: 32px; font-weight: 700; font-family: var(--mono); color: var(--c, var(--accent)); }
+.stat-card .label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.stat-card .icon { position: absolute; right: 16px; top: 16px; font-size: 28px; opacity: .15; }
+
+/* ── Forms ── */
+label {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  font-family: var(--mono);
+  margin-bottom: 6px;
+  margin-top: 16px;
+}
+label:first-of-type { margin-top: 0; }
+
+input, select, textarea {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-family: var(--font);
+  font-size: 14px;
+  color: var(--text);
+  outline: none;
+  transition: border-color .2s;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+textarea { resize: vertical; min-height: 80px; }
+select option { background: var(--card); }
+
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+/* ── Buttons ── */
+.btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: none;
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all .15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-primary { background: var(--accent); color: #000; }
+.btn-primary:hover { opacity: .85; }
+.btn-secondary { background: var(--accent2); color: #fff; }
+.btn-danger { background: transparent; border: 1px solid var(--warn); color: var(--warn); }
+.btn-danger:hover { background: var(--warn); color: #fff; }
+.btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+.btn-ghost:hover { border-color: var(--text); color: var(--text); }
+.btn-sm { padding: 6px 14px; font-size: 13px; }
+
+/* ── Entry List ── */
+.entry-list { display: flex; flex-direction: column; gap: 10px; }
+.entry-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  transition: border-color .2s;
+}
+.entry-item:hover { border-color: #2a3045; }
+.entry-body { flex: 1; }
+.entry-title { font-weight: 500; font-size: 15px; margin-bottom: 4px; }
+.entry-desc { font-size: 13px; color: var(--muted); line-height: 1.5; }
+.entry-meta { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.badge {
+  font-size: 11px;
+  font-family: var(--mono);
+  padding: 2px 8px;
+  border-radius: 20px;
+  border: 1px solid;
+}
+.badge-green  { border-color: var(--accent); color: var(--accent); }
+.badge-blue   { border-color: var(--accent2); color: var(--accent2); }
+.badge-gold   { border-color: var(--gold); color: var(--gold); }
+.badge-purple { border-color: var(--purple); color: var(--purple); }
+.badge-red    { border-color: var(--warn); color: var(--warn); }
+.badge-muted  { border-color: var(--border); color: var(--muted); }
+
+.entry-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+/* ── Duration pills ── */
+.pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.pill {
+  padding: 5px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all .15s;
+}
+.pill:hover { border-color: var(--accent); color: var(--accent); }
+.pill.active { background: var(--accent); border-color: var(--accent); color: #000; font-weight: 500; }
+
+/* ── Quick Reply Editor ── */
+.qr-list { display: flex; flex-direction: column; gap: 8px; }
+.qr-item {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+.qr-item input { background: transparent; border: none; padding: 0; font-size: 14px; }
+.qr-item input:focus { outline: none; }
+.qr-emoji { font-size: 20px; cursor: grab; }
+.qr-drag { color: var(--muted); cursor: grab; }
+
+/* ── System Prompt editor ── */
+.prompt-editor {
+  font-family: var(--mono);
+  font-size: 13px;
+  min-height: 200px;
+  line-height: 1.7;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  color: var(--text);
+  resize: vertical;
+  width: 100%;
+  outline: none;
+}
+.prompt-editor:focus { border-color: var(--accent); }
+
+/* ── Search ── */
+.search-bar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.search-bar input { flex: 1; }
+.search-bar select { width: auto; min-width: 140px; }
+
+/* ── Toast ── */
+#toast {
+  position: fixed;
+  bottom: 28px; right: 28px;
+  background: var(--accent);
+  color: #000;
+  font-weight: 600;
+  font-size: 13px;
+  font-family: var(--mono);
+  padding: 12px 22px;
+  border-radius: 8px;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: all .3s;
+  pointer-events: none;
+  z-index: 999;
+}
+#toast.show { opacity: 1; transform: none; }
+#toast.error { background: var(--warn); color: #fff; }
+
+/* ── Modal ── */
+.modal-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.75);
+  z-index: 200;
+  place-items: center;
+}
+.modal-overlay.open { display: grid; }
+.modal {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 32px;
+  width: 90%;
+  max-width: 560px;
+  animation: fadeIn .2s ease;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.modal h3 { font-size: 18px; font-weight: 600; margin-bottom: 20px; }
+.modal-actions { display: flex; gap: 10px; margin-top: 24px; justify-content: flex-end; }
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--muted);
+}
+.empty-state .icon { font-size: 48px; margin-bottom: 12px; display: block; }
+</style>
+</head>
+<body>
+
+<!-- ── Login ── -->
+<div id="login-screen">
+  <div class="login-box">
+    <span class="login-logo">🗺️</span>
+    <h1>Travel Bot</h1>
+    <p>Team Dashboard — ใส่รหัสผ่านเพื่อเข้าใช้งาน</p>
+    <input class="login-input" type="password" id="pwd-input" placeholder="••••••••"
+      onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="login-btn" onclick="doLogin()">เข้าสู่ระบบ</button>
+    <div class="login-error" id="login-error">❌ รหัสผ่านไม่ถูกต้อง</div>
+  </div>
+</div>
+
+<!-- ── App ── -->
+<div id="app">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-logo">
+      <span class="icon">🗺️</span>
+      <h2>Travel Bot</h2>
+      <span>Team Dashboard</span>
+    </div>
+    <div class="nav-item active" onclick="showPage('dashboard')">
+      <span class="icon">📊</span> ภาพรวม
+    </div>
+    <div class="nav-item" onclick="showPage('knowledge')">
+      <span class="icon">🧠</span> Knowledge Base
+    </div>
+    <div class="nav-item" onclick="showPage('promotions')">
+      <span class="icon">🎁</span> โปรโมชัน
+    </div>
+    <div class="nav-item" onclick="showPage('events')">
+      <span class="icon">📅</span> อีเวนท์
+    </div>
+    <div class="nav-item" onclick="showPage('quickreply')">
+      <span class="icon">⚡</span> Quick Reply
+    </div>
+    <div class="nav-item" onclick="showPage('prompt')">
+      <span class="icon">🤖</span> System Prompt
+    </div>
+    <div class="sidebar-footer">
+      <span class="online-dot"></span>Server online
+    </div>
+  </div>
+
+  <div class="main">
+
+    <!-- ── Dashboard ── -->
+    <div class="page active" id="page-dashboard">
+      <div class="page-header">
+        <div>
+          <h1>📊 ภาพรวม</h1>
+          <p>สถานะระบบและข้อมูลทั้งหมด</p>
+        </div>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card" style="--c: var(--accent)">
+          <div class="icon">🧠</div>
+          <div class="num" id="stat-kb">-</div>
+          <div class="label">Knowledge Base</div>
+        </div>
+        <div class="stat-card" style="--c: var(--warn)">
+          <div class="icon">🎁</div>
+          <div class="num" id="stat-promo">-</div>
+          <div class="label">โปรโมชันที่ active</div>
+        </div>
+        <div class="stat-card" style="--c: var(--gold)">
+          <div class="icon">📅</div>
+          <div class="num" id="stat-event">-</div>
+          <div class="label">อีเวนท์ที่กำลังมา</div>
+        </div>
+        <div class="stat-card" style="--c: var(--accent2)">
+          <div class="icon">⚡</div>
+          <div class="num" id="stat-qr">-</div>
+          <div class="label">Quick Reply buttons</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">🚀 ทดสอบบอท</div>
+        <div style="display:flex;gap:12px">
+          <input id="test-msg" type="text" placeholder="พิมพ์ข้อความทดสอบ..." style="flex:1">
+          <button class="btn btn-primary" onclick="testBot()">ส่ง</button>
+        </div>
+        <div id="test-result" style="margin-top:16px;padding:16px;background:var(--bg);border-radius:8px;font-size:14px;line-height:1.7;display:none;white-space:pre-wrap"></div>
+      </div>
+    </div>
+
+    <!-- ── Knowledge Base ── -->
+    <div class="page" id="page-knowledge">
+      <div class="page-header">
+        <div><h1>🧠 Knowledge Base</h1><p>ข้อมูลสถานที่ ร้านอาหาร และข้อมูลทั่วไป</p></div>
+        <button class="btn btn-primary" onclick="openModal('kb')">+ เพิ่มข้อมูล</button>
+      </div>
+      <div class="search-bar">
+        <input id="kb-search" type="text" placeholder="🔍 ค้นหา..." oninput="renderKB()">
+        <select id="kb-filter" onchange="renderKB()">
+          <option value="">ทุกหมวด</option>
+          <option>ร้านอาหาร</option><option>ที่เที่ยว</option>
+          <option>ร้านกาแฟ</option><option>ที่พัก</option>
+          <option>ข้อมูลทั่วไป</option><option>อื่นๆ</option>
+        </select>
+      </div>
+      <div class="entry-list" id="kb-list"></div>
+    </div>
+
+    <!-- ── Promotions ── -->
+    <div class="page" id="page-promotions">
+      <div class="page-header">
+        <div><h1>🎁 โปรโมชัน</h1><p>จัดการโปรโมชันและข้อเสนอพิเศษ</p></div>
+        <button class="btn btn-primary" onclick="openModal('promo')">+ เพิ่มโปรโมชัน</button>
+      </div>
+      <div class="entry-list" id="promo-list"></div>
+    </div>
+
+    <!-- ── Events ── -->
+    <div class="page" id="page-events">
+      <div class="page-header">
+        <div><h1>📅 อีเวนท์</h1><p>จัดการอีเวนท์และงานต่างๆ</p></div>
+        <button class="btn btn-primary" onclick="openModal('event')">+ เพิ่มอีเวนท์</button>
+      </div>
+      <div class="entry-list" id="event-list"></div>
+    </div>
+
+    <!-- ── Quick Reply ── -->
+    <div class="page" id="page-quickreply">
+      <div class="page-header">
+        <div><h1>⚡ Quick Reply</h1><p>ปุ่มใต้ข้อความบอท (สูงสุด 13 ปุ่ม)</p></div>
+        <button class="btn btn-primary" onclick="saveQR()">💾 บันทึก</button>
+      </div>
+      <div class="card">
+        <div class="card-title">✏️ แก้ไขปุ่ม</div>
+        <div class="qr-list" id="qr-editor"></div>
+        <button class="btn btn-ghost" style="margin-top:12px;width:100%" onclick="addQRItem()">+ เพิ่มปุ่ม</button>
+      </div>
+      <div class="card">
+        <div class="card-title">👁️ ตัวอย่าง</div>
+        <div id="qr-preview" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+      </div>
+    </div>
+
+    <!-- ── System Prompt ── -->
+    <div class="page" id="page-prompt">
+      <div class="page-header">
+        <div><h1>🤖 System Prompt</h1><p>ปรับบุคลิกและพฤติกรรมของบอท</p></div>
+        <button class="btn btn-primary" onclick="savePrompt()">💾 บันทึก</button>
+      </div>
+      <div class="card">
+        <div class="card-title">📝 แก้ไข Prompt</div>
+        <textarea class="prompt-editor" id="prompt-editor" oninput="updatePromptStats()"></textarea>
+        <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:12px;color:var(--muted);font-family:var(--mono)">
+          <span id="prompt-chars">0 ตัวอักษร</span>
+          <span id="prompt-lines">0 บรรทัด</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">💡 เทมเพลตสำเร็จรูป</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <button class="btn btn-ghost btn-sm" onclick="applyTemplate('friendly')">😊 เป็นกันเอง</button>
+          <button class="btn btn-ghost btn-sm" onclick="applyTemplate('formal')">👔 เป็นทางการ</button>
+          <button class="btn btn-ghost btn-sm" onclick="applyTemplate('fun')">🎉 สนุกสนาน</button>
+          <button class="btn btn-ghost btn-sm" onclick="applyTemplate('expert')">🎯 เชี่ยวชาญ</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<!-- ── Modals ── -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h3 id="modal-title">เพิ่มข้อมูล</h3>
+    <div id="modal-body"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>
+      <button class="btn btn-primary" id="modal-save-btn" onclick="saveModal()">บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── Config ──────────────────────────────────────────────────────────────────
+const PASSWORD = "travel1234
+"; // เปลี่ยนรหัสผ่านได้ที่นี่
+const BASE     = "";
+
+// ── State ────────────────────────────────────────────────────────────────────
+let allEntries = [];
+let editingId  = null;
+let modalType  = null;
+let qrItems    = [];
+
+const PROMPT_TEMPLATES = {
+  friendly: `คุณเป็นผู้ช่วยแนะนำที่กิน เที่ยว แบบเป็นกันเอง ตอบสั้น กระชับ เป็นภาษาไทยเสมอ
+ใช้ภาษาไทยที่ถูกต้อง สุภาพ อ่านง่าย ไม่ใช้ภาษาวิบัติ
+เป็นกันเองเหมือนเพื่อนที่รู้จักกันดี ตอบตรงประเด็น
+ถ้าไม่แน่ใจความหมาย ให้เดาจาก context แล้วตอบเลย ไม่ต้องถามซ้ำ
+ใส่ emoji ในทุกข้อความที่ตอบ ไม่เกิน 2-3 ตัว กระจายในจุดที่เหมาะสม`,
+  formal: `คุณเป็นผู้ช่วยแนะนำการท่องเที่ยวมืออาชีพ ตอบเป็นภาษาไทยที่สุภาพและเป็นทางการ
+ให้ข้อมูลครบถ้วน ถูกต้อง และเชื่อถือได้
+จัดรูปแบบคำตอบให้อ่านง่าย มีหัวข้อชัดเจน`,
+  fun: `คุณเป็นเพื่อนสนิทที่ชอบเที่ยวมากๆ สนุกสนาน ร่าเริง พูดคุยเป็นกันเอง
+ใช้ภาษาวัยรุ่นได้บ้าง ใส่ emoji เยอะๆ ได้เลย
+แนะนำสถานที่ที่ตื่นเต้นและน่าสนุก`,
+  expert: `คุณเป็นผู้เชี่ยวชาญด้านการท่องเที่ยวไทยที่มีประสบการณ์สูง
+ให้ข้อมูลเชิงลึก รายละเอียดที่แม่นยำ และ insider tips ที่หาไม่ได้จากที่อื่น
+แนะนำสถานที่ที่ไม่ค่อยมีคนรู้จักและ hidden gems`
+};
+
+// ── Login ────────────────────────────────────────────────────────────────────
+function doLogin() {
+  const pwd = document.getElementById("pwd-input").value;
+  if (pwd === PASSWORD) {
+    document.getElementById("login-screen").style.display = "none";
+    document.getElementById("app").style.display = "block";
+    loadAll();
+  } else {
+    document.getElementById("login-error").style.display = "block";
+    document.getElementById("pwd-input").value = "";
+  }
+}
+
+// ── Navigation ───────────────────────────────────────────────────────────────
+function showPage(name) {
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("active"));
+  document.getElementById(`page-${name}`).classList.add("active");
+  event.currentTarget.classList.add("active");
+}
+
+// ── API ──────────────────────────────────────────────────────────────────────
+async function api(method, path, body) {
+  const res = await fetch(path, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  return res.json();
+}
+
+// ── Load All ─────────────────────────────────────────────────────────────────
+async function loadAll() {
+  try {
+    allEntries = await api("GET", "/kb");
+    renderKB();
+    renderPromos();
+    renderEvents();
+    updateStats();
+    loadQR();
+    loadPrompt();
+  } catch (e) {
+    toast("โหลดข้อมูลไม่ได้ ตรวจสอบ server", true);
+  }
+}
+
+// ── Stats ────────────────────────────────────────────────────────────────────
+function updateStats() {
+  const now    = new Date();
+  const kb     = allEntries.filter(e => e.category !== "โปรโมชัน" && e.category !== "อีเวนท์");
+  const promos = allEntries.filter(e => e.category === "โปรโมชัน" && (!e.expiresAt || new Date(e.expiresAt) > now));
+  const events = allEntries.filter(e => e.category === "อีเวนท์" && (!e.expiresAt || new Date(e.expiresAt) > now));
+  document.getElementById("stat-kb").textContent    = kb.length;
+  document.getElementById("stat-promo").textContent = promos.length;
+  document.getElementById("stat-event").textContent = events.length;
+  document.getElementById("stat-qr").textContent    = qrItems.length || "-";
+}
+
+// ── Render Lists ─────────────────────────────────────────────────────────────
+function renderEntries(containerId, entries) {
+  const el = document.getElementById(containerId);
+  if (!entries.length) {
+    el.innerHTML = `<div class="empty-state"><span class="icon">📭</span>ยังไม่มีข้อมูล</div>`;
+    return;
+  }
+  el.innerHTML = entries.map(e => {
+    const expired = e.expiresAt && new Date(e.expiresAt) < new Date();
+    const expBadge = e.expiresAt
+      ? `<span class="badge ${expired ? "badge-red" : "badge-gold"}">⏳ ${expired ? "หมดอายุ" : formatExpiry(e.expiresAt)}</span>`
+      : `<span class="badge badge-green">∞ ไม่หมดอายุ</span>`;
+    const tags = (e.tags || []).map(t => `<span class="badge badge-muted">#${t}</span>`).join("");
+    return `
+      <div class="entry-item">
+        <div class="entry-body">
+          <div class="entry-title">${e.title}</div>
+          <div class="entry-desc">${e.content.slice(0, 100)}${e.content.length > 100 ? "..." : ""}</div>
+          <div class="entry-meta">
+            <span class="badge badge-blue">${e.category}</span>
+            ${expBadge} ${tags}
+          </div>
+        </div>
+        <div class="entry-actions">
+          <button class="btn btn-ghost btn-sm" onclick="openEditModal('${e.id}')">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="removeEntry('${e.id}')">🗑️</button>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+function renderKB() {
+  const q   = document.getElementById("kb-search").value.toLowerCase();
+  const cat = document.getElementById("kb-filter").value;
+  const filtered = allEntries.filter(e => {
+    if (e.category === "โปรโมชัน" || e.category === "อีเวนท์") return false;
+    const hay = [e.title, e.content, e.category, ...(e.tags||[])].join(" ").toLowerCase();
+    return (!q || hay.includes(q)) && (!cat || e.category === cat);
+  });
+  renderEntries("kb-list", filtered);
+}
+
+function renderPromos() {
+  renderEntries("promo-list", allEntries.filter(e => e.category === "โปรโมชัน"));
+}
+
+function renderEvents() {
+  renderEntries("event-list", allEntries.filter(e => e.category === "อีเวนท์"));
+}
+
+function formatExpiry(iso) {
+  const d = new Date(iso), diff = d - new Date();
+  if (diff < 0) return "หมดอายุแล้ว";
+  const days = Math.ceil(diff / 86400000);
+  if (days < 1) return "วันนี้";
+  if (days === 1) return "พรุ่งนี้";
+  if (days < 7) return `อีก ${days} วัน`;
+  if (days < 30) return `อีก ${Math.ceil(days/7)} สัปดาห์`;
+  return `อีก ${Math.ceil(days/30)} เดือน`;
+}
+
+// ── Modals ───────────────────────────────────────────────────────────────────
+let selectedDuration = "forever";
+
+function getFormHTML(type, data = {}) {
+  const cats = type === "kb"
+    ? ["ร้านอาหาร","ที่เที่ยว","ร้านกาแฟ","ที่พัก","ข้อมูลทั่วไป","อื่นๆ"]
+    : [];
+
+  const catSelect = cats.length
+    ? `<label>หมวดหมู่</label>
+       <select id="f-cat">${cats.map(c => `<option ${data.category===c?"selected":""}>${c}</option>`).join("")}</select>`
+    : `<input type="hidden" id="f-cat" value="${type === "promo" ? "โปรโมชัน" : "อีเวนท์"}">`;
+
+  return `
+    <label>ชื่อ / หัวข้อ *</label>
+    <input id="f-title" value="${data.title||""}" placeholder="ชื่อ...">
+    <label>รายละเอียด *</label>
+    <textarea id="f-content">${data.content||""}</textarea>
+    ${catSelect}
+    <label>แท็ก (คั่นด้วยจุลภาค)</label>
+    <input id="f-tags" value="${(data.tags||[]).join(", ")}" placeholder="เช่น เชียงใหม่, อาหาร, ถูก">
+    <label>ระยะเวลา</label>
+    <div class="pills" id="dur-pills">
+      ${["1w","2w","1m","3m","forever"].map(d =>
+        `<button class="pill ${(data.duration||"forever")===d?"active":""}" data-val="${d}" onclick="selectDur(this)">
+          ${{forever:"ไม่หมดอายุ","1w":"1 สัปดาห์","2w":"2 สัปดาห์","1m":"1 เดือน","3m":"3 เดือน"}[d]}
+        </button>`).join("")}
+      <button class="pill ${!["1w","2w","1m","3m","forever"].includes(data.duration||"forever")?"active":""}" data-val="custom" onclick="selectDur(this)">กำหนดเอง</button>
+    </div>
+    <input id="f-dur-custom" placeholder="เช่น 14d, 6m" style="margin-top:8px;display:none" value="${
+      !["1w","2w","1m","3m","forever",""].includes(data.duration||"") ? data.duration : ""
+    }">`;
+}
+
+function selectDur(btn) {
+  document.querySelectorAll("#dur-pills .pill").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  selectedDuration = btn.dataset.val;
+  document.getElementById("f-dur-custom").style.display = selectedDuration === "custom" ? "block" : "none";
+}
+
+function openModal(type, data = {}) {
+  modalType  = type;
+  editingId  = data.id || null;
+  selectedDuration = data.duration || "forever";
+  const titles = { kb: "เพิ่มข้อมูล KB", promo: "เพิ่มโปรโมชัน", event: "เพิ่มอีเวนท์" };
+  document.getElementById("modal-title").textContent = (editingId ? "✏️ แก้ไข" : "➕ ") + titles[type];
+  document.getElementById("modal-body").innerHTML = getFormHTML(type, data);
+  document.getElementById("modal").classList.add("open");
+}
+
+function openEditModal(id) {
+  const e = allEntries.find(x => x.id === id);
+  if (!e) return;
+  const type = e.category === "โปรโมชัน" ? "promo" : e.category === "อีเวนท์" ? "event" : "kb";
+  openModal(type, e);
+}
+
+function closeModal() {
+  document.getElementById("modal").classList.remove("open");
+  editingId = null; modalType = null;
+}
+
+async function saveModal() {
+  const title   = document.getElementById("f-title").value.trim();
+  const content = document.getElementById("f-content").value.trim();
+  if (!title || !content) { toast("กรุณากรอก ชื่อ และ รายละเอียด", true); return; }
+
+  const dur = selectedDuration === "custom"
+    ? (document.getElementById("f-dur-custom").value.trim() || "forever")
+    : selectedDuration;
+
+  const payload = {
+    title, content,
+    category: document.getElementById("f-cat").value,
+    tags: document.getElementById("f-tags").value.split(",").map(t => t.trim()).filter(Boolean),
+    duration: dur
+  };
+
+  try {
+    if (editingId) {
+      await api("PUT", `/kb/${editingId}`, payload);
+      toast("แก้ไขสำเร็จ ✓");
+    } else {
+      await api("POST", "/kb", payload);
+      toast("เพิ่มสำเร็จ ✓");
+    }
+    closeModal();
+    allEntries = await api("GET", "/kb");
+    renderKB(); renderPromos(); renderEvents(); updateStats();
+  } catch (e) {
+    toast("เกิดข้อผิดพลาด", true);
+  }
+}
+
+async function removeEntry(id) {
+  if (!confirm("ลบรายการนี้?")) return;
+  await api("DELETE", `/kb/${id}`);
+  allEntries = allEntries.filter(e => e.id !== id);
+  renderKB(); renderPromos(); renderEvents(); updateStats();
+  toast("ลบแล้ว");
+}
+
+// ── Quick Reply ───────────────────────────────────────────────────────────────
+function loadQR() {
+  const saved = localStorage.getItem("qr-items");
+  qrItems = saved ? JSON.parse(saved) : [
+    { emoji: "🗺️", label: "วางแผนเที่ยว",    type: "liff" },
+    { emoji: "🔍", label: "สถานที่ลับ",        type: "message", text: "แนะนำสถานที่ลับที่ไม่ค่อยมีคนรู้จัก" },
+    { emoji: "🎁", label: "โปรโมชัน",          type: "message", text: "มีโปรโมชันอะไรบ้าง" },
+    { emoji: "📅", label: "อีเวนท์",           type: "message", text: "ลงทะเบียนอีเวนท์" },
+    { emoji: "🍜", label: "ร้านอาหาร",         type: "message", text: "แนะนำร้านอาหารอร่อยแถวนี้หน่อย" },
+    { emoji: "📞", label: "ติดต่อทีม",          type: "message", text: "ติดต่อทีม" },
+  ];
+  renderQR();
+  updateStats();
+}
+
+function renderQR() {
+  const editor = document.getElementById("qr-editor");
+  editor.innerHTML = qrItems.map((item, i) => `
+    <div class="qr-item">
+      <span class="qr-emoji">${item.emoji}</span>
+      <input value="${item.label}" oninput="qrItems[${i}].label=this.value;previewQR()" placeholder="ชื่อปุ่ม" style="flex:1">
+      <input value="${item.text||""}" oninput="qrItems[${i}].text=this.value" placeholder="ข้อความที่ส่ง" style="flex:2">
+      <button class="btn btn-danger btn-sm" onclick="removeQR(${i})">✕</button>
+    </div>`).join("");
+  previewQR();
+}
+
+function previewQR() {
+  document.getElementById("qr-preview").innerHTML = qrItems.map(item =>
+    `<div style="padding:8px 16px;background:var(--surface);border:1px solid var(--border);border-radius:20px;font-size:13px;cursor:pointer">
+      ${item.emoji} ${item.label}
+    </div>`).join("");
+}
+
+function addQRItem() {
+  if (qrItems.length >= 13) { toast("Quick Reply มีได้สูงสุด 13 ปุ่ม", true); return; }
+  qrItems.push({ emoji: "✨", label: "ปุ่มใหม่", type: "message", text: "" });
+  renderQR();
+}
+
+function removeQR(i) { qrItems.splice(i, 1); renderQR(); }
+
+function saveQR() {
+  localStorage.setItem("qr-items", JSON.stringify(qrItems));
+  toast("บันทึก Quick Reply แล้ว ✓");
+  updateStats();
+}
+
+// ── System Prompt ─────────────────────────────────────────────────────────────
+function loadPrompt() {
+  const saved = localStorage.getItem("system-prompt");
+  document.getElementById("prompt-editor").value = saved || PROMPT_TEMPLATES.friendly;
+  updatePromptStats();
+}
+
+function updatePromptStats() {
+  const text = document.getElementById("prompt-editor").value;
+  document.getElementById("prompt-chars").textContent = text.length + " ตัวอักษร";
+  document.getElementById("prompt-lines").textContent = text.split("\n").length + " บรรทัด";
+}
+
+function savePrompt() {
+  const prompt = document.getElementById("prompt-editor").value.trim();
+  localStorage.setItem("system-prompt", prompt);
+  api("POST", "/config/prompt", { prompt }).catch(() => {});
+  toast("บันทึก System Prompt แล้ว ✓");
+}
+
+function applyTemplate(name) {
+  if (!confirm("แทนที่ prompt ปัจจุบันด้วยเทมเพลตนี้?")) return;
+  document.getElementById("prompt-editor").value = PROMPT_TEMPLATES[name];
+  updatePromptStats();
+}
+
+// ── Test Bot ──────────────────────────────────────────────────────────────────
+async function testBot() {
+  const msg = document.getElementById("test-msg").value.trim();
+  if (!msg) return;
+  const el = document.getElementById("test-result");
+  el.style.display = "block";
+  el.textContent = "⏳ กำลังถาม AI...";
+  try {
+    const res = await api("GET", `/ai-test?msg=${encodeURIComponent(msg)}`);
+    el.textContent = "🤖 " + (res.reply || res.error);
+  } catch (e) {
+    el.textContent = "❌ ไม่สามารถเชื่อมต่อ server ได้";
+  }
+}
+document.addEventListener("keydown", e => {
+  if (e.key === "Enter" && document.activeElement.id === "test-msg") testBot();
+});
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function toast(msg, isError = false) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.className   = "show" + (isError ? " error" : "");
+  setTimeout(() => el.className = "", 2800);
+}
+
+// ── Modal close on overlay ────────────────────────────────────────────────────
+document.getElementById("modal").addEventListener("click", e => {
+  if (e.target === e.currentTarget) closeModal();
+});
+</script>
+</body>
+</html>

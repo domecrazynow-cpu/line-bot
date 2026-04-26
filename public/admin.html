@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Knowledge Base — LINE Bot</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #0e0f13;
+    --surface:  #16181f;
+    --border:   #2a2d38;
+    --accent:   #00e5a0;
+    --accent2:  #0099ff;
+    --warn:     #ff6b6b;
+    --text:     #e8eaf0;
+    --muted:    #6b7080;
+    --radius:   10px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Sarabun', sans-serif;
+    font-size: 15px;
+    min-height: 100vh;
+    padding: 0 0 60px;
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .logo {
+    width: 36px; height: 36px;
+    background: var(--accent);
+    border-radius: 8px;
+    display: grid; place-items: center;
+    font-size: 18px;
+  }
+  header h1 {
+    font-size: 17px; font-weight: 700;
+    letter-spacing: .5px;
+  }
+  header span {
+    font-size: 12px; color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .header-right {
+    margin-left: auto;
+    display: flex; gap: 10px; align-items: center;
+  }
+  #stats {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  /* ── Layout ── */
+  .container { max-width: 960px; margin: 0 auto; padding: 32px 24px; }
+
+  /* ── Form Card ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    margin-bottom: 28px;
+  }
+  .card-title {
+    font-size: 13px;
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 20px;
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+  .form-grid .full { grid-column: 1 / -1; }
+
+  label {
+    display: block;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 6px;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  input, textarea, select {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'Sarabun', sans-serif;
+    font-size: 14px;
+    padding: 10px 12px;
+    outline: none;
+    transition: border-color .2s;
+  }
+  input:focus, textarea:focus, select:focus {
+    border-color: var(--accent);
+  }
+  textarea { resize: vertical; min-height: 90px; }
+  select option { background: var(--surface); }
+
+  /* Duration pills */
+  .duration-group {
+    display: flex; flex-wrap: wrap; gap: 8px;
+  }
+  .dur-pill {
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-size: 13px;
+    cursor: pointer;
+    font-family: 'Sarabun', sans-serif;
+    transition: all .15s;
+    width: auto;
+  }
+  .dur-pill:hover { border-color: var(--accent); color: var(--accent); }
+  .dur-pill.active { background: var(--accent); border-color: var(--accent); color: #000; font-weight: 600; }
+
+  #duration-input { display: none; margin-top: 8px; }
+
+  /* Buttons */
+  .btn {
+    padding: 10px 22px;
+    border-radius: 6px;
+    border: none;
+    font-family: 'Sarabun', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .btn-primary { background: var(--accent); color: #000; }
+  .btn-primary:hover { opacity: .85; }
+  .btn-danger  { background: transparent; border: 1px solid var(--warn); color: var(--warn); padding: 6px 14px; font-size: 13px; }
+  .btn-danger:hover { background: var(--warn); color: #fff; }
+  .btn-edit    { background: transparent; border: 1px solid var(--accent2); color: var(--accent2); padding: 6px 14px; font-size: 13px; }
+  .btn-edit:hover { background: var(--accent2); color: #fff; }
+
+  /* ── Search bar ── */
+  .search-row {
+    display: flex; gap: 12px; margin-bottom: 20px; align-items: center;
+  }
+  .search-row input { flex: 1; }
+  .filter-select { width: auto; min-width: 130px; }
+
+  /* ── Entry list ── */
+  #entry-list { display: flex; flex-direction: column; gap: 12px; }
+
+  .entry-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    animation: fadeIn .25s ease;
+    transition: border-color .2s;
+  }
+  .entry-card:hover { border-color: #3a3d50; }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  .entry-title {
+    font-weight: 700; font-size: 15px; margin-bottom: 4px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .entry-content { color: var(--muted); font-size: 13px; line-height: 1.6; margin-bottom: 10px; }
+
+  .entry-meta {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  }
+  .badge {
+    font-size: 11px;
+    font-family: 'IBM Plex Mono', monospace;
+    padding: 2px 8px;
+    border-radius: 20px;
+    border: 1px solid;
+  }
+  .badge-cat  { border-color: var(--accent2); color: var(--accent2); }
+  .badge-tag  { border-color: var(--border);  color: var(--muted); }
+  .badge-exp  { border-color: #f5a623; color: #f5a623; }
+  .badge-forever { border-color: var(--accent); color: var(--accent); }
+  .badge-expired { border-color: var(--warn); color: var(--warn); }
+
+  .entry-actions { display: flex; gap: 8px; align-items: flex-start; }
+
+  .empty {
+    text-align: center; padding: 60px 20px;
+    color: var(--muted); font-size: 14px;
+  }
+  .empty .icon { font-size: 36px; margin-bottom: 12px; }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--accent); color: #000;
+    font-weight: 700; font-size: 13px;
+    padding: 10px 20px; border-radius: 6px;
+    opacity: 0; transform: translateY(10px);
+    transition: all .3s; pointer-events: none;
+    font-family: 'IBM Plex Mono', monospace;
+    z-index: 999;
+  }
+  #toast.show { opacity: 1; transform: none; }
+  #toast.error { background: var(--warn); color: #fff; }
+
+  /* ── Modal ── */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.7);
+    z-index: 200;
+    place-items: center;
+  }
+  .modal-overlay.open { display: grid; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+    width: 90%; max-width: 540px;
+    animation: fadeIn .2s ease;
+  }
+  .modal h3 { margin-bottom: 18px; font-size: 16px; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
+  .btn-cancel { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+  .btn-cancel:hover { border-color: var(--text); color: var(--text); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🧠</div>
+  <div>
+    <h1>Knowledge Base</h1>
+    <span>LINE Bot — ข้อมูลส่วนตัว</span>
+  </div>
+  <div class="header-right">
+    <span id="stats">กำลังโหลด...</span>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Add Form -->
+  <div class="card">
+    <div class="card-title">+ เพิ่มข้อมูลใหม่</div>
+    <div class="form-grid">
+      <div class="full">
+        <label>ชื่อ / หัวข้อ *</label>
+        <input id="f-title" type="text" placeholder="เช่น ร้านก๋วยเตี๋ยวเรือนายหมู">
+      </div>
+      <div class="full">
+        <label>รายละเอียด *</label>
+        <textarea id="f-content" placeholder="เช่น ร้านอยู่ถนนเศรษฐกิจ 1 สมุทรสาคร เปิด 8-15น ทุกวัน ราคา 50-80 บาท อร่อยมาก น้ำซุปเข้มข้น"></textarea>
+      </div>
+      <div>
+        <label>หมวดหมู่</label>
+        <select id="f-category">
+          <option>ร้านอาหาร</option>
+          <option>ที่เที่ยว</option>
+          <option>ร้านกาแฟ</option>
+          <option>ที่พัก</option>
+          <option>ข้อมูลทั่วไป</option>
+          <option>อื่นๆ</option>
+        </select>
+      </div>
+      <div>
+        <label>แท็ก (คั่นด้วยจุลภาค)</label>
+        <input id="f-tags" type="text" placeholder="เช่น ก๋วยเตี๋ยว, สมุทรสาคร, ถูก">
+      </div>
+      <div class="full">
+        <label>ระยะเวลาข้อมูล (หมดอายุเมื่อไร)</label>
+        <div class="duration-group">
+          <button class="dur-pill" data-val="1w">1 สัปดาห์</button>
+          <button class="dur-pill" data-val="2w">2 สัปดาห์</button>
+          <button class="dur-pill" data-val="1m">1 เดือน</button>
+          <button class="dur-pill" data-val="3m">3 เดือน</button>
+          <button class="dur-pill active" data-val="forever">ไม่หมดอายุ</button>
+          <button class="dur-pill" data-val="custom">กำหนดเอง</button>
+        </div>
+        <input id="duration-input" type="text" placeholder="เช่น 14d, 3w, 2m">
+      </div>
+      <div class="full" style="display:flex;justify-content:flex-end;margin-top:4px">
+        <button class="btn btn-primary" onclick="submitEntry()">บันทึก</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- List -->
+  <div class="search-row">
+    <input id="search-input" type="text" placeholder="🔍 ค้นหาข้อมูล..." oninput="renderList()">
+    <select id="filter-cat" class="filter-select" onchange="renderList()">
+      <option value="">ทุกหมวด</option>
+      <option>ร้านอาหาร</option>
+      <option>ที่เที่ยว</option>
+      <option>ร้านกาแฟ</option>
+      <option>ที่พัก</option>
+      <option>ข้อมูลทั่วไป</option>
+      <option>อื่นๆ</option>
+    </select>
+  </div>
+  <div id="entry-list"></div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <h3>✏️ แก้ไขข้อมูล</h3>
+    <div class="form-grid">
+      <div class="full"><label>ชื่อ</label><input id="e-title"></div>
+      <div class="full"><label>รายละเอียด</label><textarea id="e-content"></textarea></div>
+      <div><label>หมวดหมู่</label>
+        <select id="e-category">
+          <option>ร้านอาหาร</option><option>ที่เที่ยว</option><option>ร้านกาแฟ</option>
+          <option>ที่พัก</option><option>ข้อมูลทั่วไป</option><option>อื่นๆ</option>
+        </select>
+      </div>
+      <div><label>แท็ก</label><input id="e-tags"></div>
+      <div class="full"><label>ระยะเวลาใหม่ (เช่น 7d, 1m, forever)</label><input id="e-duration" placeholder="forever"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-cancel" onclick="closeModal()">ยกเลิก</button>
+      <button class="btn btn-primary" onclick="saveEdit()">บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  let entries = [];
+  let selectedDuration = "forever";
+  let editingId = null;
+
+  // ── Duration pills ──────────────────────────────────────────────────────────
+  document.querySelectorAll(".dur-pill").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".dur-pill").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      selectedDuration = btn.dataset.val;
+      document.getElementById("duration-input").style.display =
+        selectedDuration === "custom" ? "block" : "none";
+    });
+  });
+
+  // ── API helpers ─────────────────────────────────────────────────────────────
+  async function api(method, path, body) {
+    const res = await fetch(path, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined
+    });
+    return res.json();
+  }
+
+  async function loadEntries() {
+    try {
+      entries = await api("GET", "/kb");
+      renderList();
+      updateStats();
+    } catch (e) {
+      toast("โหลดข้อมูลไม่ได้ ตรวจสอบ server", true);
+    }
+  }
+
+  // ── Render ──────────────────────────────────────────────────────────────────
+  function renderList() {
+    const q   = document.getElementById("search-input").value.toLowerCase();
+    const cat = document.getElementById("filter-cat").value;
+
+    let list = entries.filter(e => {
+      const hay = [e.title, e.content, e.category, ...(e.tags||[])].join(" ").toLowerCase();
+      const matchQ   = !q   || hay.includes(q);
+      const matchCat = !cat || e.category === cat;
+      return matchQ && matchCat;
+    });
+
+    const el = document.getElementById("entry-list");
+
+    if (!list.length) {
+      el.innerHTML = `<div class="empty"><div class="icon">📭</div>ยังไม่มีข้อมูล — เพิ่มรายการแรกได้เลย!</div>`;
+      return;
+    }
+
+    el.innerHTML = list.map(e => {
+      const expired = e.expiresAt && new Date(e.expiresAt) < new Date();
+      const expBadge = e.expiresAt
+        ? `<span class="badge ${expired ? "badge-expired" : "badge-exp"}">
+             ${expired ? "⛔ หมดอายุ" : "⏳ " + formatExpiry(e.expiresAt)}
+           </span>`
+        : `<span class="badge badge-forever">∞ ไม่หมดอายุ</span>`;
+      const tags = (e.tags||[]).map(t => `<span class="badge badge-tag">#${t}</span>`).join("");
+      return `
+        <div class="entry-card">
+          <div>
+            <div class="entry-title">
+              ${e.title}
+              ${expired ? '<span style="color:var(--warn);font-size:12px">หมดอายุแล้ว</span>' : ""}
+            </div>
+            <div class="entry-content">${e.content}</div>
+            <div class="entry-meta">
+              <span class="badge badge-cat">${e.category}</span>
+              ${expBadge}
+              ${tags}
+            </div>
+          </div>
+          <div class="entry-actions">
+            <button class="btn btn-edit" onclick="openEdit('${e.id}')">แก้ไข</button>
+            <button class="btn btn-danger" onclick="removeEntry('${e.id}')">ลบ</button>
+          </div>
+        </div>`;
+    }).join("");
+  }
+
+  function formatExpiry(iso) {
+    const d = new Date(iso);
+    const diff = d - new Date();
+    if (diff < 0) return "หมดอายุแล้ว";
+    const days = Math.ceil(diff / 86400000);
+    if (days < 1)  return "วันนี้";
+    if (days === 1) return "พรุ่งนี้";
+    if (days < 7)  return `อีก ${days} วัน`;
+    if (days < 30) return `อีก ${Math.ceil(days/7)} สัปดาห์`;
+    return `อีก ${Math.ceil(days/30)} เดือน`;
+  }
+
+  function updateStats() {
+    const total   = entries.length;
+    const expired = entries.filter(e => e.expiresAt && new Date(e.expiresAt) < new Date()).length;
+    document.getElementById("stats").textContent =
+      `${total} รายการ${expired ? ` · ${expired} หมดอายุ` : ""}`;
+  }
+
+  // ── Submit ──────────────────────────────────────────────────────────────────
+  async function submitEntry() {
+    const title   = document.getElementById("f-title").value.trim();
+    const content = document.getElementById("f-content").value.trim();
+    if (!title || !content) { toast("กรุณากรอก ชื่อ และ รายละเอียด", true); return; }
+
+    const dur = selectedDuration === "custom"
+      ? document.getElementById("duration-input").value.trim() || "forever"
+      : selectedDuration;
+
+    const tags = document.getElementById("f-tags").value
+      .split(",").map(t => t.trim()).filter(Boolean);
+
+    try {
+      await api("POST", "/kb", {
+        title, content,
+        category: document.getElementById("f-category").value,
+        tags, duration: dur
+      });
+      document.getElementById("f-title").value   = "";
+      document.getElementById("f-content").value = "";
+      document.getElementById("f-tags").value    = "";
+      toast("เพิ่มข้อมูลสำเร็จ ✓");
+      loadEntries();
+    } catch (e) {
+      toast("เกิดข้อผิดพลาด", true);
+    }
+  }
+
+  async function removeEntry(id) {
+    if (!confirm("ลบรายการนี้?")) return;
+    await api("DELETE", `/kb/${id}`);
+    toast("ลบแล้ว");
+    loadEntries();
+  }
+
+  // ── Edit Modal ──────────────────────────────────────────────────────────────
+  function openEdit(id) {
+    const e = entries.find(x => x.id === id);
+    if (!e) return;
+    editingId = id;
+    document.getElementById("e-title").value    = e.title;
+    document.getElementById("e-content").value  = e.content;
+    document.getElementById("e-category").value = e.category;
+    document.getElementById("e-tags").value     = (e.tags||[]).join(", ");
+    document.getElementById("e-duration").value = e.duration || "forever";
+    document.getElementById("edit-modal").classList.add("open");
+  }
+
+  function closeModal() {
+    document.getElementById("edit-modal").classList.remove("open");
+    editingId = null;
+  }
+
+  async function saveEdit() {
+    const tags = document.getElementById("e-tags").value
+      .split(",").map(t => t.trim()).filter(Boolean);
+    await api("PUT", `/kb/${editingId}`, {
+      title:    document.getElementById("e-title").value.trim(),
+      content:  document.getElementById("e-content").value.trim(),
+      category: document.getElementById("e-category").value,
+      duration: document.getElementById("e-duration").value.trim() || "forever",
+      tags
+    });
+    toast("แก้ไขสำเร็จ ✓");
+    closeModal();
+    loadEntries();
+  }
+
+  // ── Toast ───────────────────────────────────────────────────────────────────
+  function toast(msg, isError = false) {
+    const el = document.getElementById("toast");
+    el.textContent = msg;
+    el.className   = "show" + (isError ? " error" : "");
+    setTimeout(() => el.className = "", 2800);
+  }
+
+  // Close modal on overlay click
+  document.getElementById("edit-modal").addEventListener("click", e => {
+    if (e.target === e.currentTarget) closeModal();
+  });
+
+  loadEntries();
+</script>
+</body>
+</html>
