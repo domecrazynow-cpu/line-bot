@@ -1,0 +1,108 @@
+// utils/groq.js
+const Groq = require("groq-sdk");
+
+const groq  = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const MODEL = "llama-3.3-70b-versatile";
+
+const SYSTEM_PROMPT = process.env.SYSTEM_PROMPT ||
+  "คุณเป็นผู้ช่วยแนะนำที่กิน เที่ยว เฉพาะในประเทศไทยเท่านั้น\n" +
+  "ตอบเป็นภาษาไทยที่ถูกต้อง สุภาพ อ่านง่าย ไม่ใช้ภาษาวิบัติ\n" +
+  "เป็นกันเองเหมือนเพื่อนที่รู้จักกันดี\n" +
+  "คุณเข้าใจภาษาไทยทุกรูปแบบ ทั้งภาษาพูด คำแสลง คำทับศัพท์ และประโยคที่พิมพ์ผิดหรือตกหล่น\n" +
+  "ให้เดาจาก context แล้วตอบเลย ไม่ต้องถามซ้ำ\n\n" +
+  "ขอบเขตที่ตอบได้:\n" +
+  "- แนะนำร้านอาหาร ของกิน ของอร่อย\n" +
+  "- แนะนำสถานที่ท่องเที่ยว ที่พัก\n" +
+  "- วางแผนการเดินทางในไทย\n" +
+  "- โปรโมชันและอีเวนท์ที่เกี่ยวข้อง\n\n" +
+  "ถ้าถามนอกขอบเขต ให้ตอบว่า: ขอโทษนะครับ ผมช่วยแนะนำแค่ที่กินที่เที่ยวในไทยเท่านั้นเลยครับ\n\n" +
+  "การจัดรูปแบบคำตอบ:\n" +
+  "- ตอบสั้น กระชับ ได้ใจความ อ่านแล้วเข้าใจทันที ไม่ต้องตีความ\n" +
+  "- ถ้าแนะนำหลายอย่าง ให้แยกเป็นข้อๆ ชัดเจน\n" +
+  "- ขึ้นต้นด้วยหัวข้อหลักก่อนเสมอ แล้วค่อยอธิบาย\n" +
+  "- ทุกข้อความต้องมี emoji ที่เข้ากับเนื้อหา 1-3 ตัว กระจายในจุดที่เหมาะสม\n" +
+  "- ถ้าแนะนำสถานที่หรือร้าน ให้บอก ชื่อ / ประเภท / งบ ทุกครั้ง\n" +
+  "- ถ้าไม่มั่นใจในข้อมูล ให้บอกว่า แนะนำโทรเช็คก่อนไปนะครับ หรือ ลองเช็ค Google Maps อีกทีนะครับ\n\n" +
+  "สิ่งที่ห้ามทำ:\n" +
+  "- ห้ามตอบนอกขอบเขตที่กำหนด\n" +
+  "- ห้ามใช้ภาษาวิบัติหรือสะกดผิด\n" +
+  "- ห้ามตอบยาวเกินความจำเป็น\n" +
+  "- ห้ามถามกลับโดยไม่จำเป็น ให้เดาแล้วตอบเลย\n" +
+  "- ห้ามแต่งข้อมูลที่ไม่แน่ใจขึ้นมาเองโดยเด็ดขาด โดยเฉพาะวันที่ ราคา และอีเวนท์";
+
+async function askGroq(userMsg, kbContext) {
+  const systemWithContext = kbContext
+    ? SYSTEM_PROMPT + "\n\n---\nข้อมูล insider ของเรา (ให้ใช้ข้อมูลนี้ก่อนเสมอ):\n" + kbContext + "\n---"
+    : SYSTEM_PROMPT;
+
+  const completion = await groq.chat.completions.create({
+    model: MODEL,
+    messages: [
+      { role: "system", content: systemWithContext },
+      { role: "user",   content: userMsg }
+    ],
+    temperature: 0.7,
+    max_tokens: 1024,
+  });
+  return completion.choices[0].message.content;
+}
+
+async function generateTripPlan({ province, area, mood, budget, days, weather, people, festival, extra, lat, lng }) {
+  const locationContext = (lat && lng) ? "\nพิกัด GPS: " + lat + ", " + lng : "";
+  const prompt = "สร้างแผนเที่ยวดังนี้:\n" +
+    "- จังหวัด: " + province + "\n" +
+    "- พื้นที่/อำเภอ: " + (area || "ทั่วจังหวัด") + "\n" +
+    "- อารมณ์/สไตล์: " + mood + "\n" +
+    "- งบประมาณ: " + budget + " บาท/คน\n" +
+    "- จำนวนวัน: " + days + " วัน\n" +
+    "- จำนวนคน: " + people + " คน\n" +
+    "- สภาพอากาศ: " + weather + "\n" +
+    "- เทศกาล/โอกาส: " + (festival || "ทั่วไป") + "\n" +
+    (extra ? "- ความต้องการพิเศษ: " + extra + "\n" : "") +
+    locationContext + "\n\n" +
+    "กรุณาสร้างแผนเที่ยวที่:\n" +
+    "1. แนะนำสถานที่ที่ไม่ค่อยมีคนรู้จัก (hidden gems) เป็นหลัก\n" +
+    "2. จัดตารางเวลาแต่ละวันชัดเจน เช้า/กลางวัน/เย็น/ค่ำ\n" +
+    "3. แนะนำร้านอาหารอร่อยในพื้นที่\n" +
+    "4. บอกงบประมาณโดยประมาณแต่ละกิจกรรม\n" +
+    "5. แนะนำการเดินทาง รถเมล์/รถสองแถว/ระยะทาง\n" +
+    "6. เตือนสิ่งที่ควรระวังตามสภาพอากาศ\n" +
+    "7. แนะนำโทรเช็คก่อนไปทุกครั้ง เผื่อข้อมูลเปลี่ยน";
+
+  const completion = await groq.chat.completions.create({
+    model: MODEL,
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user",   content: prompt }
+    ],
+    temperature: 0.7,
+    max_tokens: 2048,
+  });
+  return completion.choices[0].message.content;
+}
+
+async function findNearbyEventsGroq(location) {
+  const today = new Date().toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" });
+  const prompt = "ค้นหาอีเวนท์ งาน เทศกาล หรือกิจกรรมพิเศษที่น่าจะเกิดขึ้น\n" +
+    "บริเวณ: " + location + "\n" +
+    "วันที่อ้างอิง: " + today + "\n\n" +
+    'ตอบในรูปแบบ JSON array เท่านั้น ห้ามมีข้อความอื่น:\n' +
+    '[{"title":"ชื่ออีเวนท์","description":"รายละเอียด","date":"วันที่","location":"สถานที่","registerUrl":null}]\n' +
+    "ถ้าไม่มีอีเวนท์ที่แน่ใจ ให้ return [] เท่านั้น ห้ามแต่งข้อมูล";
+
+  try {
+    const completion = await groq.chat.completions.create({
+      model: MODEL,
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.3,
+      max_tokens: 512,
+    });
+    const text  = completion.choices[0].message.content;
+    const clean = text.replace(/```json|```/g, "").trim();
+    return JSON.parse(clean);
+  } catch {
+    return [];
+  }
+}
+
+module.exports = { askGroq, generateTripPlan, findNearbyEventsGroq, SYSTEM_PROMPT };

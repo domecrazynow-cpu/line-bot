@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>วางแผนเที่ยว</title>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&family=Kanit:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --primary:   #00b894;
+  --primary2:  #00cec9;
+  --accent:    #fdcb6e;
+  --dark:      #1a1a2e;
+  --card:      rgba(255,255,255,0.92);
+  --glass:     rgba(255,255,255,0.15);
+  --text:      #2d3436;
+  --muted:     #636e72;
+  --radius:    18px;
+  --shadow:    0 8px 32px rgba(0,184,148,0.15);
+  --font:      'Prompt', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font);
+  color: var(--text);
+  min-height: 100vh;
+  background: #0f3460;
+  background-image:
+    radial-gradient(ellipse at 20% 20%, #00b89440 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 80%, #00cec940 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 50%, #16213e 0%, #0f3460 100%);
+  padding-bottom: 100px;
+}
+
+/* ── Floating background elements ── */
+body::before {
+  content: '';
+  position: fixed;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(0,184,148,0.08) 0%, transparent 40%),
+    radial-gradient(circle at 80% 70%, rgba(0,206,201,0.08) 0%, transparent 40%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Hero Banner ── */
+.hero {
+  position: relative;
+  padding: 48px 20px 56px;
+  text-align: center;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.hero-bg {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, #00b894 0%, #00cec9 50%, #0984e3 100%);
+  opacity: 0.15;
+}
+
+.hero-pattern {
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 25% 25%, rgba(255,255,255,0.1) 1px, transparent 1px),
+    radial-gradient(circle at 75% 75%, rgba(255,255,255,0.1) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+.logo-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255,255,255,0.15);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 50px;
+  padding: 10px 20px;
+  margin-bottom: 20px;
+  animation: fadeDown .6s ease;
+}
+
+.logo-icon {
+  font-size: 28px;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%,100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+
+.logo-text {
+  font-family: 'Kanit', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: white;
+  letter-spacing: 1px;
+}
+
+.hero h1 {
+  font-family: 'Kanit', sans-serif;
+  font-size: 32px;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 8px;
+  text-shadow: 0 2px 20px rgba(0,0,0,0.3);
+  animation: fadeDown .7s ease;
+}
+
+.hero p {
+  font-size: 14px;
+  color: rgba(255,255,255,0.8);
+  animation: fadeDown .8s ease;
+}
+
+/* ── Scene icons row ── */
+.scene-row {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 20px;
+  animation: fadeDown .9s ease;
+}
+.scene-icon {
+  width: 52px;
+  height: 52px;
+  background: rgba(255,255,255,0.15);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  transition: transform .2s;
+}
+.scene-icon:hover { transform: scale(1.1) rotate(-5deg); }
+
+@keyframes fadeDown {
+  from { opacity: 0; transform: translateY(-20px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ── Container ── */
+.container {
+  max-width: 480px;
+  margin: -24px auto 0;
+  padding: 0 16px;
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Cards ── */
+.card {
+  background: var(--card);
+  backdrop-filter: blur(20px);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 14px;
+  box-shadow: var(--shadow);
+  border: 1px solid rgba(255,255,255,0.6);
+  animation: slideUp .5s ease both;
+}
+
+.card:nth-child(1) { animation-delay: .1s; }
+.card:nth-child(2) { animation-delay: .2s; }
+.card:nth-child(3) { animation-delay: .3s; }
+.card:nth-child(4) { animation-delay: .4s; }
+.card:nth-child(5) { animation-delay: .5s; }
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-img {
+  width: 100%;
+  height: 120px;
+  border-radius: 12px;
+  object-fit: cover;
+  margin-bottom: 14px;
+  display: block;
+}
+
+label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 6px;
+  margin-top: 14px;
+}
+label:first-of-type { margin-top: 0; }
+
+input, textarea {
+  width: 100%;
+  border: 1.5px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 11px 14px;
+  font-family: var(--font);
+  font-size: 14px;
+  color: var(--text);
+  background: #fafafa;
+  outline: none;
+  transition: all .2s;
+}
+input:focus, textarea:focus {
+  border-color: var(--primary);
+  background: white;
+  box-shadow: 0 0 0 3px rgba(0,184,148,0.1);
+}
+textarea { resize: none; min-height: 70px; }
+
+/* ── Pills ── */
+.pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.pill {
+  padding: 8px 14px;
+  border-radius: 50px;
+  border: 1.5px solid #e0e0e0;
+  background: white;
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all .2s;
+  font-weight: 500;
+}
+.pill:hover { border-color: var(--primary); color: var(--primary); transform: translateY(-1px); }
+.pill.active {
+  background: linear-gradient(135deg, var(--primary), var(--primary2));
+  border-color: transparent;
+  color: white;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(0,184,148,0.35);
+  transform: translateY(-1px);
+}
+
+/* ── Budget ── */
+.budget-display {
+  text-align: center;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 10px 0;
+  font-family: 'Kanit', sans-serif;
+}
+input[type=range] {
+  padding: 0;
+  border: none;
+  background: transparent;
+  accent-color: var(--primary);
+  height: 6px;
+}
+
+/* ── Steppers ── */
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 6px;
+}
+.stepper button {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  border: 2px solid var(--primary);
+  background: white;
+  font-size: 20px;
+  color: var(--primary);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: all .15s;
+  font-weight: 700;
+}
+.stepper button:hover { background: var(--primary); color: white; }
+.stepper span { font-size: 22px; font-weight: 700; min-width: 32px; text-align: center; }
+
+/* ── Submit ── */
+.btn-submit {
+  width: 100%;
+  padding: 18px;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary2) 100%);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  font-family: 'Kanit', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 8px;
+  box-shadow: 0 8px 24px rgba(0,184,148,0.4);
+  transition: all .2s;
+  letter-spacing: .5px;
+}
+.btn-submit:active { transform: scale(0.98); opacity: .9; }
+
+/* ── Contact Widget ── */
+.contact-widget {
+  background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 14px;
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: transform .2s;
+  text-decoration: none;
+}
+.contact-widget:hover { transform: translateY(-2px); }
+.contact-icon { font-size: 32px; flex-shrink: 0; }
+.contact-text h3 { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
+.contact-text p  { font-size: 12px; opacity: .85; }
+.contact-arrow { margin-left: auto; font-size: 20px; opacity: .7; }
+
+.contact-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.contact-mini {
+  background: var(--card);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  box-shadow: var(--shadow);
+  border: 1px solid rgba(255,255,255,0.6);
+  cursor: pointer;
+  transition: transform .2s;
+  text-decoration: none;
+  color: var(--text);
+}
+.contact-mini:hover { transform: translateY(-2px); }
+.contact-mini .icon { font-size: 28px; }
+.contact-mini .label { font-size: 12px; font-weight: 600; color: var(--muted); }
+
+/* ── Result Section ── */
+#result-section { display: none; }
+.result-hero {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary2) 100%);
+  color: white;
+  padding: 28px 20px;
+  text-align: center;
+  border-radius: 0 0 32px 32px;
+  margin-bottom: 16px;
+}
+.result-hero h2 { font-family: 'Kanit', sans-serif; font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+.result-hero p  { font-size: 13px; opacity: .85; }
+
+.plan-box {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin: 0 16px 16px;
+  box-shadow: var(--shadow);
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--text);
+  max-height: 50vh;
+  overflow-y: auto;
+  border: 1px solid rgba(255,255,255,0.6);
+}
+.plan-heading { font-family: 'Kanit', sans-serif; font-weight: 700; font-size: 15px; color: var(--primary); margin: 14px 0 6px; }
+.plan-item { margin: 4px 0; padding-left: 8px; }
+
+.result-actions { padding: 0 16px; display: flex; flex-direction: column; gap: 10px; }
+.btn-approve {
+  width: 100%; padding: 17px;
+  background: linear-gradient(135deg, var(--primary), var(--primary2));
+  color: white; border: none; border-radius: var(--radius);
+  font-family: 'Kanit', sans-serif; font-size: 17px; font-weight: 700;
+  cursor: pointer; box-shadow: 0 6px 20px rgba(0,184,148,.35);
+}
+.btn-retry {
+  width: 100%; padding: 14px;
+  background: white; color: var(--primary);
+  border: 2px solid var(--primary); border-radius: var(--radius);
+  font-family: 'Kanit', sans-serif; font-size: 16px; font-weight: 600; cursor: pointer;
+}
+.btn-edit {
+  width: 100%; padding: 12px;
+  background: transparent; color: var(--muted);
+  border: 1.5px solid #e0e0e0; border-radius: var(--radius);
+  font-family: var(--font); font-size: 14px; cursor: pointer;
+}
+
+/* ── Loading ── */
+.loading { display: none; text-align: center; padding: 60px 20px; }
+.spinner {
+  width: 52px; height: 52px;
+  border: 4px solid rgba(0,184,148,0.2);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+  margin: 0 auto 20px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- ── Hero Banner ── -->
+<div class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-pattern"></div>
+
+  <div class="logo-wrap">
+    <span class="logo-icon">🌴</span>
+    <span class="logo-text">TRAVEL BOT</span>
+  </div>
+
+  <h1>วางแผนเที่ยว</h1>
+  <p>บอกเราว่าอยากไปไหน แล้วรับแผนเที่ยวทันที!</p>
+
+  <div class="scene-row">
+    <div class="scene-icon">🏖️</div>
+    <div class="scene-icon">🏔️</div>
+    <div class="scene-icon">🍜</div>
+    <div class="scene-icon">🛺</div>
+    <div class="scene-icon">🎪</div>
+  </div>
+</div>
+
+<!-- ── Form ── -->
+<div class="container" id="form-section">
+
+  <!-- 📍 สถานที่ -->
+  <div class="card">
+    <img class="card-img" src="https://images.unsplash.com/photo-1528360983277-13d401cdc186?w=600&q=80" alt="สถานที่ท่องเที่ยว">
+    <div class="card-title">📍 สถานที่</div>
+    <label>จังหวัด *</label>
+    <input id="province" type="text" placeholder="เช่น เชียงใหม่, กระบี่, สมุทรสาคร">
+    <label>อำเภอ / พื้นที่ (ถ้ามี)</label>
+    <input id="area" type="text" placeholder="เช่น นิมมาน, อ่าวนาง">
+  </div>
+
+  <!-- 🎭 อารมณ์ -->
+  <div class="card">
+    <img class="card-img" src="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&q=80" alt="อารมณ์การเที่ยว">
+    <div class="card-title">🎭 อารมณ์ & สไตล์</div>
+    <div class="pills" id="mood-pills">
+      <button class="pill" data-val="ผ่อนคลาย 🧘">ผ่อนคลาย 🧘</button>
+      <button class="pill" data-val="ผจญภัย 🏕️">ผจญภัย 🏕️</button>
+      <button class="pill" data-val="โรแมนติก 💑">โรแมนติก 💑</button>
+      <button class="pill" data-val="ครอบครัว 👨‍👩‍👧">ครอบครัว 👨‍👩‍👧</button>
+      <button class="pill" data-val="กินเที่ยว 🍜">กินเที่ยว 🍜</button>
+      <button class="pill" data-val="ธรรมชาติ 🌿">ธรรมชาติ 🌿</button>
+      <button class="pill" data-val="วัฒนธรรม 🏛️">วัฒนธรรม 🏛️</button>
+      <button class="pill" data-val="ชิลล์ริมทะเล 🏖️">ชิลล์ริมทะเล 🏖️</button>
+    </div>
+  </div>
+
+  <!-- ☁️ สภาพอากาศ -->
+  <div class="card">
+    <img class="card-img" src="https://images.unsplash.com/photo-1601297183305-6df142704ea2?w=600&q=80" alt="สภาพอากาศ">
+    <div class="card-title">☁️ สภาพอากาศ & เทศกาล</div>
+    <label>สภาพอากาศตอนนี้</label>
+    <div class="pills" id="weather-pills">
+      <button class="pill" data-val="แดดจัด ☀️">แดดจัด ☀️</button>
+      <button class="pill" data-val="มีเมฆบ้าง ⛅">มีเมฆบ้าง ⛅</button>
+      <button class="pill" data-val="ฝนตก 🌧️">ฝนตก 🌧️</button>
+      <button class="pill" data-val="หนาว 🧣">หนาว 🧣</button>
+      <button class="pill" data-val="ไม่แน่ใจ 🤷">ไม่แน่ใจ 🤷</button>
+    </div>
+    <label>เทศกาล / โอกาสพิเศษ (ถ้ามี)</label>
+    <input id="festival" type="text" placeholder="เช่น วันหยุดยาว, สงกรานต์, วันเกิด">
+  </div>
+
+  <!-- 💰 งบ & เวลา -->
+  <div class="card">
+    <img class="card-img" src="https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=600&q=80" alt="งบประมาณ">
+    <div class="card-title">💰 งบ & เวลา</div>
+    <label>งบประมาณต่อคน</label>
+    <div class="budget-display" id="budget-display">1,000 บาท</div>
+    <input type="range" id="budget" min="500" max="10000" step="500" value="1000"
+      oninput="updateBudget(this.value)">
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:4px">
+      <span>500฿</span><span>10,000฿</span>
+    </div>
+    <label>จำนวนวัน</label>
+    <div class="stepper">
+      <button onclick="step('days',-1)">−</button>
+      <span id="days-val">1</span>
+      <button onclick="step('days',1)">+</button>
+      <span style="font-size:13px;color:var(--muted)">วัน</span>
+    </div>
+    <label>จำนวนคน</label>
+    <div class="stepper">
+      <button onclick="step('people',-1)">−</button>
+      <span id="people-val">2</span>
+      <button onclick="step('people',1)">+</button>
+      <span style="font-size:13px;color:var(--muted)">คน</span>
+    </div>
+  </div>
+
+  <!-- ➕ เพิ่มเติม -->
+  <div class="card">
+    <div class="card-title">➕ ความต้องการเพิ่มเติม</div>
+    <textarea id="extra" placeholder="เช่น ไม่อยากเดินเยอะ, มีเด็กเล็ก, ชอบของทะเล..."></textarea>
+  </div>
+
+  <button class="btn-submit" onclick="submitPlan()">✨ สร้างแผนเที่ยว!</button>
+
+  <!-- ── Contact Widget ── -->
+  <div style="margin-top:24px">
+    <a class="contact-widget" href="https://line.me/ti/p/@travelteam" target="_blank">
+      <span class="contact-icon">💬</span>
+      <div class="contact-text">
+        <h3>ติดต่อทีมงาน</h3>
+        <p>มีคำถาม? แชทกับเราได้เลย!</p>
+      </div>
+      <span class="contact-arrow">›</span>
+    </a>
+
+    <div class="contact-grid">
+      <a class="contact-mini" href="https://line.me/ti/p/@travelteam" target="_blank">
+        <span class="icon">🟢</span>
+        <span class="label">LINE Official</span>
+      </a>
+      <a class="contact-mini" href="tel:+66000000000">
+        <span class="icon">📞</span>
+        <span class="label">โทรหาเรา</span>
+      </a>
+      <a class="contact-mini" href="mailto:team@travel.com">
+        <span class="icon">📧</span>
+        <span class="label">Email</span>
+      </a>
+      <a class="contact-mini" onclick="if(liff.isInClient())liff.closeWindow()">
+        <span class="icon">↩️</span>
+        <span class="label">กลับ LINE</span>
+      </a>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Result ── -->
+<div id="result-section">
+  <div class="result-hero">
+    <h2>🗺️ แผนเที่ยวของคุณ</h2>
+    <p>อ่านดูก่อนนะครับ ถ้าถูกใจกด ส่งเลย!</p>
+  </div>
+  <div class="plan-box" id="plan-content"></div>
+  <div class="result-actions">
+    <button class="btn-approve" onclick="approvePlan()">✅ ถูกใจ ส่งเลย!</button>
+    <button class="btn-retry"   onclick="retryPlan()">🔄 ขอแผนอื่น</button>
+    <button class="btn-edit"    onclick="editForm()">✏️ แก้ไขข้อมูล</button>
+  </div>
+</div>
+
+<!-- ── Loading ── -->
+<div class="loading" id="loading-section">
+  <div class="spinner"></div>
+  <p style="font-size:16px;font-weight:600;color:white">กำลังสร้างแผนเที่ยว...</p>
+  <p style="font-size:13px;color:rgba(255,255,255,0.7);margin-top:8px">AI กำลังหาสถานที่ที่ใช่สำหรับคุณ 🤖</p>
+</div>
+
+<script>
+const state = { mood: "", weather: "", days: 1, people: 2 };
+let currentPayload = null, currentPlan = null;
+
+const LIFF_ID = window.__LIFF_ID__ || "";
+async function initLiff() {
+  try { await liff.init({ liffId: LIFF_ID }); }
+  catch(e) { console.warn("LIFF:", e); }
+}
+initLiff();
+
+function setupPills(id, key) {
+  document.getElementById(id).querySelectorAll(".pill").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.getElementById(id).querySelectorAll(".pill").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      state[key] = btn.dataset.val;
+    });
+  });
+}
+setupPills("mood-pills",    "mood");
+setupPills("weather-pills", "weather");
+
+function updateBudget(val) {
+  document.getElementById("budget-display").textContent = Number(val).toLocaleString() + " บาท";
+}
+
+function step(key, delta) {
+  const max = key === "days" ? 14 : 20;
+  state[key] = Math.min(max, Math.max(1, state[key] + delta));
+  document.getElementById(key + "-val").textContent = state[key];
+}
+
+async function submitPlan() {
+  const province = document.getElementById("province").value.trim();
+  if (!province)      { alert("กรุณาใส่จังหวัดก่อนนะ 😊"); return; }
+  if (!state.mood)    { alert("เลือกอารมณ์การเที่ยวด้วยนะ 🎭"); return; }
+  if (!state.weather) { alert("เลือกสภาพอากาศด้วยนะ ☁️"); return; }
+
+  currentPayload = {
+    province,
+    area:     document.getElementById("area").value.trim(),
+    mood:     state.mood,
+    weather:  state.weather,
+    budget:   document.getElementById("budget").value,
+    days:     state.days,
+    people:   state.people,
+    festival: document.getElementById("festival").value.trim(),
+    extra:    document.getElementById("extra").value.trim(),
+  };
+  await fetchPlan();
+}
+
+async function fetchPlan() {
+  document.getElementById("form-section").classList.add("hidden");
+  document.getElementById("result-section").style.display = "none";
+  document.getElementById("loading-section").style.display = "block";
+  try {
+    const res  = await fetch("/trip-plan", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(currentPayload) });
+    const data = await res.json();
+    currentPlan = data.plan;
+    document.getElementById("loading-section").style.display = "none";
+    document.getElementById("plan-content").innerHTML = formatPlan(currentPlan);
+    document.getElementById("result-section").style.display = "block";
+  } catch(err) {
+    document.getElementById("loading-section").style.display = "none";
+    document.getElementById("form-section").classList.remove("hidden");
+    alert("เกิดข้อผิดพลาด ลองใหม่อีกครั้งนะ 😅");
+  }
+}
+
+function formatPlan(text) {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/^#{1,3}\s+(.+)$/gm, '<div class="plan-heading">$1</div>')
+    .replace(/^[-•]\s+(.+)$/gm, '<div class="plan-item">• $1</div>')
+    .replace(/\n\n/g, "<br><br>")
+    .replace(/\n/g, "<br>");
+}
+
+async function approvePlan() {
+  if (liff.isInClient()) {
+    await liff.sendMessages([{ type:"text", text:currentPlan }]);
+    liff.closeWindow();
+  } else {
+    alert("ส่งแผนแล้ว!\n\n" + currentPlan);
+  }
+}
+
+async function retryPlan()  { await fetchPlan(); }
+function editForm() {
+  document.getElementById("result-section").style.display = "none";
+  document.getElementById("form-section").classList.remove("hidden");
+}
+</script>
+</body>
+</html>

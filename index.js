@@ -1,15 +1,14 @@
 require("dotenv").config();
 const express = require("express");
 const axios   = require("axios");
-const OpenAI  = require("openai");
 const path    = require("path");
 const multer  = require("multer");
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
-const { autoConvertFont }                                  = require("./utils/fontConvert");
-const { addSlang }                                         = require("./utils/normalizeSlang");
-const { findNearbyEventsAI, askGeminiRealtime }            = require("./utils/gemini");
-const { extractLocationKeywords }                          = require("./utils/eventMatcher");
+const { autoConvertFont }          = require("./utils/fontConvert");
+const { addSlang }                 = require("./utils/normalizeSlang");
+const { askGroq, generateTripPlan, findNearbyEventsGroq } = require("./utils/groq");
+const { extractLocationKeywords }  = require("./utils/eventMatcher");
 const { startSession, hasSession, processStep, confirmSend, cancelSession } = require("./utils/flexBuilder");
 const {
   addEntry, deleteEntry, updateEntry,
@@ -26,29 +25,9 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const LINE_TOKEN   = process.env.LINE_TOKEN;
-const LIFF_ID      = process.env.LIFF_ID;
-const OLLAMA_URL   = process.env.OLLAMA_URL   || "http://localhost:11434/v1";
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3.2";
-const PORT         = process.env.PORT || 3000;
-
-const SYSTEM_PROMPT = process.env.SYSTEM_PROMPT ||
-  `คุณเป็นผู้ช่วยแนะนำที่กิน เที่ยว แบบเป็นกันเอง
-ตอบเป็นภาษาไทยที่ถูกต้อง สุภาพ อ่านง่าย ไม่ใช้ภาษาวิบัติ
-ถึงแม้ผู้ใช้จะส่งภาษาอังกฤษหรือผสม ให้ตอบเป็นภาษาไทยเสมอ
-คุณเข้าใจภาษาพูด คำแสลง คำทับศัพท์ และประโยคที่พิมพ์ผิดหรือตกหล่น ให้เดาจาก context แล้วตอบเลย ไม่ต้องถามซ้ำ
-การจัดรูปแบบคำตอบ:
-- ตอบสั้น กระชับ ได้ใจความ อ่านแล้วเข้าใจทันที
-- ถ้าแนะนำหลายอย่าง ให้แยกเป็นข้อๆ ชัดเจน
-- ทุกข้อความต้องมี emoji 1-3 ตัว เข้ากับเนื้อหา
-- ถ้าแนะนำสถานที่หรือร้าน ให้บอก ชื่อ / ประเภท / งบ ทุกครั้ง
-สิ่งที่ห้ามทำ:
-- ห้ามตอบวนเวียน ซ้ำๆ
-- ห้ามใช้ภาษาวิบัติ
-- ห้ามตอบยาวเกินความจำเป็น
-- ห้ามถามกลับโดยไม่จำเป็น`;
-
-const ai = new OpenAI({ baseURL: OLLAMA_URL, apiKey: "ollama" });
+const LINE_TOKEN = process.env.LINE_TOKEN;
+const LIFF_ID    = process.env.LIFF_ID;
+const PORT       = process.env.PORT || 3000;
 
 // ── Preprocess ────────────────────────────────────────────────────────────────
 function preprocessMessage(text) {
@@ -61,23 +40,26 @@ function preprocessMessage(text) {
   return converted;
 }
 
-// ── Ask Ollama ────────────────────────────────────────────────────────────────
-async function askOllama(userMsg) {
+// ── Ask AI (Groq / Ollama) ───────────────────────────────────────────────────
+async function askAI(userMsg) {
   const cleanMsg = preprocessMessage(userMsg);
   const hits     = searchKnowledge(cleanMsg);
   const context  = buildContext(hits);
+
   if (hits.length) console.log(`[kb] ${hits.length} entries`);
-  const systemWithContext = context
-    ? `${SYSTEM_PROMPT}\n\n---\nข้อมูลส่วนตัว:\n${context}\n---`
-    : SYSTEM_PROMPT;
-  const res = await ai.chat.completions.create({
-    model: OLLAMA_MODEL,
-    messages: [
-      { role: "system", content: systemWithContext },
-      { role: "user",   content: cleanMsg }
-    ]
-  });
-  return res.choices[0].message.content;
+
+  return generateResponse(
+    process.env.AI_PROVIDER || "groq",
+    cleanMsg,
+    context
+  );
+}
+
+// ── Generate Response ────────────────────────────────────────────────────────
+async function generateResponse(provider, prompt, context = "") {
+
+  return askGroq(prompt, context);
+
 }
 
 // ── LINE helpers ──────────────────────────────────────────────────────────────
@@ -93,28 +75,19 @@ async function sendLine(replyToken, messages) {
   }
 }
 
-// Push message (ส่งหาทุกคน) — ใช้สำหรับ broadcast flex
-async function pushLine(userId, messages) {
-  try {
-    await axios.post(
-      "https://api.line.me/v2/bot/message/push",
-      { to: userId, messages: Array.isArray(messages) ? messages : [messages] },
-      { headers: { Authorization: `Bearer ${LINE_TOKEN}`, "Content-Type": "application/json" } }
-    );
-  } catch (err) {
-    console.error("[push]", err.response?.data || err.message);
-  }
-}
-
 function textMsg(text) { return { type: "text", text }; }
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.get("/",      (req, res) => res.send("Bot is running 🚀"));
 app.get("/admin", (req, res) => res.sendFile(path.join(__dirname, "public", "admin.html")));
 app.get("/team",  (req, res) => res.sendFile(path.join(__dirname, "public", "team.html")));
-app.get("/liff",  (req, res) => res.sendFile(path.join(__dirname, "public", "liff.html")));
+app.get("/liff", (req, res) => {
+  const html = require("fs").readFileSync(
+    path.join(__dirname, "public", "liff.html"), "utf8"
+  ).replace("window.__LIFF_ID__ || \"\"", `"${LIFF_ID}"`);
+  res.send(html);
+});
 
-// Config APIs
 app.post("/config/prompt", (req, res) => {
   process.env.SYSTEM_PROMPT = req.body.prompt;
   res.json({ ok: true });
@@ -143,43 +116,24 @@ app.post("/config/richmenu-buttons", async (req, res) => {
   }
 });
 
-// Carousel items — เก็บใน KB category พิเศษ
-app.get("/config/carousel",     (req, res) => res.json(searchKnowledge("carousel")));
-app.post("/config/carousel",    (req, res) => {
-  const { title, content, tags, duration } = req.body;
-  try {
-    res.json({ ok: true, entry: addEntry({ title, content, category: "carousel", tags: [...(tags||[]), "carousel"], duration }) });
-  } catch (err) { res.status(400).json({ error: err.message }); }
-});
-
 // AI test
 app.get("/ai-test", async (req, res) => {
-  const msg = req.query.msg || "แนะนำที่เที่ยว";
-  try { res.json({ msg, reply: await askOllama(msg) }); }
+  const msg = req.query.msg || "แนะนำที่เที่ยวใกล้กรุงเทพ";
+  try { res.json({ msg, reply: await askAI(msg) }); }
   catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Trip Plan
+// Trip Plan จาก LIFF
 app.post("/trip-plan", async (req, res) => {
   try {
-    const hits    = searchKnowledge(`${req.body.province} ${req.body.area || ""}`);
-    const context = buildContext(hits);
-    const { province, area, mood, budget, days, weather, people, festival, extra, lat, lng } = req.body;
-    const locationContext = (lat && lng) ? `\n(พิกัด GPS ของ user: ${lat}, ${lng} — ใช้แนะนำสถานที่ที่ใกล้จริงๆ)` : "";
-    const prompt = `สร้างแผนเที่ยว ${province} ${area || ""} อารมณ์: ${mood} งบ: ${budget} บาท ${days} วัน ${people} คน สภาพอากาศ: ${weather}${locationContext}${extra ? " ความต้องการพิเศษ: " + extra : ""}
-แนะนำสถานที่ที่ไม่ค่อยมีคนรู้จัก จัดตารางเวลาชัดเจน บอกงบแต่ละกิจกรรม และเส้นทางเดินทาง`;
-    const res2 = await ai.chat.completions.create({
-      model: OLLAMA_MODEL,
-      messages: [
-        { role: "system", content: context ? `${SYSTEM_PROMPT}\n\ninsider:\n${context}` : SYSTEM_PROMPT },
-        { role: "user",   content: prompt }
-      ]
-    });
-    res.json({ ok: true, plan: res2.choices[0].message.content });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+    const plan = await generateTripPlan(req.body);
+    res.json({ ok: true, plan });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// KB API
+// ── KB API ────────────────────────────────────────────────────────────────────
 app.get("/kb",        (req, res) => res.json(getAllEntries()));
 app.post("/kb",       (req, res) => {
   const { title, content, category, tags, duration } = req.body;
@@ -220,11 +174,11 @@ app.post("/webhook", async (req, res) => {
       const locationName = title || address || `พิกัด ${latitude}, ${longitude}`;
       let replyText;
       try {
-        replyText = await askGeminiRealtime(
-          `user อยู่แถว "${locationName}" (พิกัด: ${latitude}, ${longitude}) ค้นหาร้านอาหารอร่อยหรือที่เที่ยวน่าสนใจที่ยังเปิดอยู่ตอนนี้ใกล้เคียงหน่อยครับ ระบุชื่อร้าน ประเภท และงบด้วย`
+        replyText = await askAI(
+          `user อยู่แถว "${locationName}" (พิกัด: ${latitude}, ${longitude}) แนะนำร้านอาหารอร่อยหรือที่เที่ยวน่าสนใจใกล้เคียงหน่อยครับ ระบุชื่อร้าน ประเภท และงบด้วย`
         );
       } catch (err) {
-        console.error("[ollama-location]", err.message);
+        console.error("[groq-location]", err.message);
         replyText = "⚠️ AI ขัดข้อง ลองใหม่นะครับ 🙏";
       }
       await sendLine(event.replyToken, [{
@@ -243,7 +197,6 @@ app.post("/webhook", async (req, res) => {
     }
 
     if (event.message.type !== "text") continue;
-
     const userText = event.message.text.trim();
 
     // ── Flex Builder Session ──────────────────────────────────────────────────
@@ -255,28 +208,39 @@ app.post("/webhook", async (req, res) => {
       }
       if (userText === "ส่ง" || userText === "send") {
         const flex = confirmSend(userId);
-        if (flex) {
-          await sendLine(event.replyToken, [flex, withQuickReply(textMsg("ส่ง Flex Message แล้วครับ! ✅"))]);
-        }
+        if (flex) await sendLine(event.replyToken, [flex, withQuickReply(textMsg("ส่ง Flex Message แล้วครับ! ✅"))]);
         continue;
       }
       const result = processStep(userId, userText);
       if (result) {
-        const messages = [textMsg(result.reply)];
-        if (result.flex) messages.unshift(result.flex);
-        await sendLine(event.replyToken, messages);
+        const msgs = [textMsg(result.reply)];
+        if (result.flex) msgs.unshift(result.flex);
+        await sendLine(event.replyToken, msgs);
       }
       continue;
     }
 
     // ── /flex command ─────────────────────────────────────────────────────────
     if (userText === "/flex" || userText === "สร้าง flex") {
-      const firstQuestion = startSession(userId);
-      await sendLine(event.replyToken, [textMsg("🎨 สร้าง Flex Message!\nพิมพ์ 'ยกเลิก' เพื่อหยุดได้ตลอด\n\n" + firstQuestion)]);
+      const firstQ = startSession(userId);
+      await sendLine(event.replyToken, [textMsg("🎨 สร้าง Flex Message!\nพิมพ์ 'ยกเลิก' เพื่อหยุดได้ตลอด\n\n" + firstQ)]);
       continue;
     }
 
     // ── Special Commands ──────────────────────────────────────────────────────
+    // ── Skip LIFF trip plan messages ─────────────────────────────────────────────
+if (
+  userText.startsWith("**เช้า") ||
+  userText.startsWith("**กลางวัน") ||
+  userText.startsWith("**เย็น") ||
+  userText.startsWith("**ค่ำ") ||
+  userText.startsWith("## วัน") ||
+  userText.startsWith("# แผนเที่ยว") ||
+  userText.length > 800
+) {
+  // ข้อความจาก LIFF trip plan — ไม่ตอบ
+  continue;
+}
     if (userText.length > 500) {
       await sendLine(event.replyToken, [withQuickReply(textMsg("กรุณาส่งข้อความสั้นกว่านี้นะ 😅"))]);
       continue;
@@ -284,15 +248,13 @@ app.post("/webhook", async (req, res) => {
 
     if (userText === "ระบุพื้นที่") {
       await sendLine(event.replyToken, [textMsg(
-        "📍 พิมพ์ชื่อย่าน อำเภอ หรือสถานที่ที่อยู่ตอนนี้ได้เลยครับ\n\nเช่น:\n- สยาม\n- อ่อนนุช\n- นิมมานเฮมิน เชียงใหม่\n- ถนนข้าวสาร\n- แถวเซ็นทรัลเวิลด์"
+        "📍 พิมพ์ชื่อย่าน อำเภอ หรือสถานที่ที่อยู่ตอนนี้ได้เลยครับ\n\nเช่น:\n- สยาม\n- อ่อนนุช\n- นิมมานเฮมิน เชียงใหม่\n- ถนนข้าวสาร"
       )]);
       continue;
     }
 
     if (userText === "ส่ง location ใหม่") {
-      await sendLine(event.replyToken, [textMsg(
-        "📍 กดปุ่ม + ด้านล่าง แล้วเลือก 'ตำแหน่ง' เพื่อส่ง location ใหม่ได้เลยครับ 😊"
-      )]);
+      await sendLine(event.replyToken, [textMsg("📍 กดปุ่ม + ด้านล่าง แล้วเลือก 'ตำแหน่ง' เพื่อส่ง location ใหม่ได้เลยครับ 😊")]);
       continue;
     }
 
@@ -312,12 +274,12 @@ app.post("/webhook", async (req, res) => {
       if (places.length) {
         const carouselPlaces = places.slice(0, 10).map(p => ({
           title: p.title,
-          description: p.content.slice(0, 80) + "...",
+          description: p.content.slice(0, 80) + (p.content.length > 80 ? "..." : ""),
           category: p.category, emoji: "🔍", color: "#0099ff", budget: "ประหยัด",
         }));
         await sendLine(event.replyToken, [withQuickReply(makePlaceCarousel(carouselPlaces))]);
       } else {
-        const reply = await askGeminiRealtime("แนะนำสถานที่ท่องเที่ยวที่ไม่ค่อยมีคนรู้จักในไทย 5 แห่ง ที่ยังเปิดให้บริการอยู่ตอนนี้");
+        const reply = await askAI("แนะนำสถานที่ท่องเที่ยวที่ไม่ค่อยมีคนรู้จักในไทย 5 แห่ง");
         await sendLine(event.replyToken, [withQuickReply(textMsg(reply))]);
       }
       continue;
@@ -329,25 +291,22 @@ app.post("/webhook", async (req, res) => {
       continue;
     }
 
-    // ── Ollama ตอบหลัก ────────────────────────────────────────────────────────
+    // ── Groq ตอบหลัก ─────────────────────────────────────────────────────────
     let replyText;
     try {
-      // ใช้ Gemini real-time ค้นหาข้อมูลปัจจุบันทุกคำถาม
-      const hits    = searchKnowledge(userText);
-      const context = buildContext(hits);
-      replyText = await askGeminiRealtime(userText, context);
+      replyText = await askAI(userText);
     } catch (err) {
-      console.error("[ollama]", err.message);
+      console.error("[groq]", err.message);
       replyText = "⚠️ AI ขัดข้องชั่วคราว ลองใหม่อีกครั้งนะครับ 🙏";
     }
 
     const messages = [withQuickReply(textMsg(replyText))];
 
-    // ── Gemini หาอีเวนท์ใกล้เคียง ─────────────────────────────────────────────
+    // ── หาอีเวนท์ใกล้เคียง ───────────────────────────────────────────────────
     try {
       const locations = extractLocationKeywords(replyText);
       if (locations.length) {
-        const aiEvents = await findNearbyEventsAI(locations.join(", "));
+        const aiEvents = await findNearbyEventsGroq(locations.join(", "));
         if (aiEvents.length) {
           const bubbles = aiEvents.slice(0, 5).map(e => ({
             type: "bubble", size: "kilo",
@@ -377,7 +336,7 @@ app.post("/webhook", async (req, res) => {
         }
       }
     } catch (err) {
-      console.error("[gemini-event]", err.message);
+      console.error("[event]", err.message);
     }
 
     await sendLine(event.replyToken, messages);
@@ -390,21 +349,13 @@ app.listen(PORT, async () => {
   console.log(`   Admin  → http://localhost:${PORT}/admin`);
   console.log(`   Team   → http://localhost:${PORT}/team`);
   console.log(`   LIFF   → http://localhost:${PORT}/liff`);
-  if (!LINE_TOKEN)                 console.log("   ⚠️  LINE_TOKEN not set");
-  if (!LIFF_ID)                    console.log("   ⚠️  LIFF_ID not set");
-  if (!process.env.GEMINI_API_KEY) console.log("   ⚠️  GEMINI_API_KEY not set");
-  try {
-    const tagsUrl = OLLAMA_URL.replace(/\/v1\/?$/, "") + "/api/tags";
-    const r = await axios.get(tagsUrl, { timeout: 3000 });
-    const models = (r.data.models || []).map(m => m.name);
-    if (models.some(n => n === OLLAMA_MODEL || n.startsWith(OLLAMA_MODEL + ":"))) {
-      console.log(`   ✅ Ollama — "${OLLAMA_MODEL}" พร้อม`);
-    } else {
-      console.log(`   ⚠️  ไม่พบ model "${OLLAMA_MODEL}"`);
-    }
-  } catch { console.log(`   ❌ Ollama ไม่ได้รัน`); }
+  console.log(`   AI     → ${process.env.AI_PROVIDER || "groq"}`);
+  if (!LINE_TOKEN)              console.log("   ⚠️  LINE_TOKEN not set");
+  if (!LIFF_ID)                 console.log("   ⚠️  LIFF_ID not set");
+  if (!process.env.GROQ_API_KEY) console.log("   ⚠️  GROQ_API_KEY not set");
   if (LINE_TOKEN && LIFF_ID) {
     console.log("   🎨 สร้าง Rich Menu...");
     await setupRichMenu();
   }
 });
+
