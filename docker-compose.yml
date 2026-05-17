@@ -1,8 +1,76 @@
 services:
+
+  nginx:
+    image: nginx:alpine
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - app
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   app:
     build: .
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
+    restart: always
+    expose:
+      - "3000"
     env_file:
       - .env
+    depends_on:
+      - ollama
+      - qdrant
+    volumes:
+      - ./db:/app/db
+      - ./public:/app/public
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  ollama:
+    image: ollama/ollama
+    restart: always
+    expose:
+      - "11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:11434/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  qdrant:
+    image: qdrant/qdrant
+    restart: always
+    expose:
+      - "6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:6333/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  watchdog:
+    build:
+      context: .
+      dockerfile: Dockerfile.watchdog
+    restart: always
+    env_file:
+      - .env
+    depends_on:
+      - app
+
+volumes:
+  ollama_data:
+  qdrant_data:
