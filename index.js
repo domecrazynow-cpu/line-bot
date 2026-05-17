@@ -40,7 +40,7 @@ function preprocessMessage(text) {
   return converted;
 }
 
-// ── Ask AI (Groq / Ollama) ───────────────────────────────────────────────────
+// ── Ask AI (Groq + KB context) ───────────────────────────────────────────────
 async function askAI(userMsg) {
   const cleanMsg = preprocessMessage(userMsg);
   const hits     = searchKnowledge(cleanMsg);
@@ -48,18 +48,7 @@ async function askAI(userMsg) {
 
   if (hits.length) console.log(`[kb] ${hits.length} entries`);
 
-  return generateResponse(
-    process.env.AI_PROVIDER || "groq",
-    cleanMsg,
-    context
-  );
-}
-
-// ── Generate Response ────────────────────────────────────────────────────────
-async function generateResponse(provider, prompt, context = "") {
-
-  return askGroq(prompt, context);
-
+  return askGroq(cleanMsg, context);
 }
 
 // ── LINE helpers ──────────────────────────────────────────────────────────────
@@ -228,19 +217,20 @@ app.post("/webhook", async (req, res) => {
     }
 
     // ── Special Commands ──────────────────────────────────────────────────────
-    // ── Skip LIFF trip plan messages ─────────────────────────────────────────────
-if (
-  userText.startsWith("**เช้า") ||
-  userText.startsWith("**กลางวัน") ||
-  userText.startsWith("**เย็น") ||
-  userText.startsWith("**ค่ำ") ||
-  userText.startsWith("## วัน") ||
-  userText.startsWith("# แผนเที่ยว") ||
-  userText.length > 800
-) {
-  // ข้อความจาก LIFF trip plan — ไม่ตอบ
-  continue;
-}
+
+    // ข้อความจาก LIFF trip plan (ยาว / มี markdown) — ไม่ตอบ
+    if (
+      userText.startsWith("**เช้า") ||
+      userText.startsWith("**กลางวัน") ||
+      userText.startsWith("**เย็น") ||
+      userText.startsWith("**ค่ำ") ||
+      userText.startsWith("## วัน") ||
+      userText.startsWith("# แผนเที่ยว") ||
+      userText.length > 800
+    ) {
+      continue;
+    }
+
     if (userText.length > 500) {
       await sendLine(event.replyToken, [withQuickReply(textMsg("กรุณาส่งข้อความสั้นกว่านี้นะ 😅"))]);
       continue;

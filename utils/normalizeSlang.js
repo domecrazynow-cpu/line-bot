@@ -4,7 +4,7 @@
 const path = require('path');
 const fs = require('fs');
 
-const SLANG_PATH = path.join(__dirname, 'slang.json');
+const SLANG_PATH = path.join(__dirname, '../db/slang.json');
 
 /**
  * โหลด slang dictionary (reload ทุกครั้ง เพื่อให้แก้ไขไฟล์แล้วมีผลทันที)

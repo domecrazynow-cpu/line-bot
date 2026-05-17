@@ -1,4 +1,4 @@
-// ingest.js
+// scripts/ingest.js
 // ระบบ RAG — อ่าน PDF แล้วเก็บลง Qdrant Vector DB
 
 require("dotenv").config();
@@ -10,7 +10,7 @@ const QDRANT_URL   = process.env.QDRANT_URL   || "http://localhost:6333";
 const OLLAMA_URL   = process.env.OLLAMA_URL   || "http://localhost:11434";
 const EMBED_MODEL  = "nomic-embed-text";
 const COLLECTION   = "knowledge";
-const PDF_DIR      = process.env.PDF_DIR || "./pdfs";
+const PDF_DIR      = process.env.PDF_DIR || path.join(__dirname, "../pdfs");
 const CHUNK_SIZE   = 500;  // ตัวอักษรต่อ chunk
 const CHUNK_OVERLAP = 100; // overlap ระหว่าง chunk
 

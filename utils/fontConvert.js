@@ -27,7 +27,8 @@ function looksLikeWrongFont(text) {
   const engChars = text.match(/[a-zA-Z]/g) || [];
   const thaiChars = text.match(/[\u0E00-\u0E7F]/g) || [];
   // ถ้ามีอังกฤษ > 70% และไม่มีไทยเลย → น่าจะพิมพ์ผิด font
-return engChars.length > 5 && thaiChars.length === 0 && text.length > 6;}
+  return engChars.length > 5 && thaiChars.length === 0 && text.length > 6;
+}
 
 /**
  * แปลง English keyboard → Thai
