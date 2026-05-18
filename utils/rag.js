@@ -7,7 +7,7 @@ const QDRANT_URL = process.env.QDRANT_URL || "http://qdrant:6333";
 const OLLAMA_URL = process.env.OLLAMA_URL || "http://ollama:11434";
 const EMBED_MODEL = "nomic-embed-text";
 const COLLECTION  = "knowledge";
-const TOP_K       = 5; // จำนวน chunks ที่ดึงมา
+const TOP_K       = 3; // จำนวน chunks ที่ดึงมา
 
 /**
  * แปลงข้อความเป็น embedding
@@ -35,9 +35,10 @@ async function searchRAG(query) {
     if (!results.length) return null;
 
     // รวม context จากทุก chunk
-    const context = results
-      .map(r => `[จาก: ${r.payload.source}]\n${r.payload.text}`)
-      .join("\n\n---\n\n");
+const context = results
+  .map(r => `[จาก: ${r.payload.source}]\n${r.payload.text}`)
+  .join("\n\n---\n\n")
+  .slice(0, 4500);
 
     return context;
   } catch (err) {

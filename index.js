@@ -40,23 +40,64 @@ function preprocessMessage(text) {
   return converted;
 }
 
+const majorMap = {
+  MTE: "ครุศาสตร์เครื่องกล Mechanical Technology Education",
+  ETE: "ครุศาสตร์ไฟฟ้า Electrical Technology Education",
+  CTE: "ครุศาสตร์โยธา Civil Technology Education",
+  IED: "ครุศาสตร์อุตสาหการ Industrial Technology Education",
+  PPT: "เทคโนโลยีการพิมพ์และบรรจุภัณฑ์ Printing and Packaging Technology",
+  ECT: "เทคโนโลยีและสื่อสารการศึกษา Educational Communications and Technology",
+};
+
 // ── Ask AI (Groq + KB context) ───────────────────────────────────────────────
 const { searchRAG, isRAGReady } = require("./utils/rag");
 
-async function askAI(userMsg) {
-  const cleanMsg = preprocessMessage(userMsg);
-  
-  // ค้นหาจาก KB ก่อน
-  const hits    = searchKnowledge(cleanMsg);
-  const context = buildContext(hits);
+function buildRagQuery(cleanMsg) {
+  const upperMsg = cleanMsg.trim().toUpperCase();
+  const majorKey = Object.keys(majorMap).find(code => upperMsg.includes(code));
 
-  // ค้นหาจาก RAG (PDF)
-  let ragContext = null;
-  if (await isRAGReady()) {
-    ragContext = await searchRAG(cleanMsg);
+  const topicHints = [];
+
+  if (cleanMsg.includes("เรียนอะไร") || cleanMsg.includes("รายวิชา") || cleanMsg.includes("วิชาบังคับ")) {
+    topicHints.push("รายวิชา หมวดวิชาเฉพาะ วิชาบังคับ หน่วยกิต โครงสร้างหลักสูตร");
   }
 
-  // รวม context ทั้งสอง
+  if (cleanMsg.includes("คุณสมบัติ") || cleanMsg.includes("สมัคร") || cleanMsg.includes("รับเข้า")) {
+    topicHints.push("คุณสมบัติผู้สมัคร การรับเข้าศึกษา แผนการรับ เกณฑ์การรับสมัคร");
+  }
+
+  if (cleanMsg.includes("จบแล้ว") || cleanMsg.includes("อาชีพ") || cleanMsg.includes("ทำงาน")) {
+    topicHints.push("อาชีพหลังสำเร็จการศึกษา แนวทางประกอบอาชีพ ผลลัพธ์การเรียนรู้");
+  }
+
+  if (!majorKey) return `${cleanMsg} ${topicHints.join(" ")}`.trim();
+
+  return [
+    cleanMsg,
+    majorKey,
+    majorMap[majorKey],
+    ...topicHints,
+  ].join(" ");
+}
+
+async function askAI(userMsg) {
+  const cleanMsg = preprocessMessage(userMsg);
+  const queryMsg = buildRagQuery(cleanMsg);
+
+  const hits = searchKnowledge(queryMsg);
+  const context = buildContext(hits);
+
+  let ragContext = null;
+  const ragReady = await isRAGReady();
+
+  if (ragReady) {
+    ragContext = await searchRAG(queryMsg);
+    console.log("[rag] query:", queryMsg);
+    console.log("[rag] ready:", ragReady, "found:", !!ragContext, "length:", ragContext?.length || 0);
+  } else {
+    console.log("[rag] not ready");
+  }
+
   const fullContext = [context, ragContext].filter(Boolean).join("\n\n---\n\n");
 
   return askGroq(cleanMsg, fullContext || null);

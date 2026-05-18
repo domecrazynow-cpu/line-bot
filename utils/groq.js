@@ -25,7 +25,17 @@ const SYSTEM_PROMPT = process.env.SYSTEM_PROMPT ||
   "- ห้ามตอบนอกขอบเขตที่กำหนด\n" +
   "- ห้ามใช้ภาษาวิบัติหรือสะกดผิด\n" +
   "- ห้ามตอบยาวเกินความจำเป็น\n" +
-  "- ห้ามถามกลับโดยไม่จำเป็น ให้เดาแล้วตอบเลย\n";
+  "- ห้ามเดาข้อมูลหลักสูตรเอง ถ้าไม่พบใน context ให้บอกว่าไม่พบข้อมูลในเอกสาร\n" +
+  "ให้เดาจาก context แล้วตอบเลย ไม่ต้องถามซ้ำ\n\n" +
+  "รหัสสาขาที่ต้องจำ:\n" +
+"- MTE = ครุศาสตร์เครื่องกล (Mechanical Technology Education)\n" +
+"- ETE = ครุศาสตร์ไฟฟ้า (Electrical Technology Education)\n" +
+"- CTE = ครุศาสตร์โยธา (Civil Technology Education)\n" +
+"- IEd = ครุศาสตร์อุตสาหการ (Industrial Technology Education)\n" +
+"- PPT = เทคโนโลยีการพิมพ์และบรรจุภัณฑ์ (Printing and Packaging Technology)\n" +
+"- ECT = เทคโนโลยีและสื่อสารการศึกษา (Educational Communications and Technology)\n\n"
+  "ถ้าผู้ใช้ถามเรื่องหลักสูตร ให้ตอบแบบมีรายละเอียดพอสมควร แบ่งหัวข้อชัดเจน เช่น ภาพรวม รายวิชา แผนการเรียน คุณสมบัติ และอาชีพหลังจบ\n" +
+  "ตอบให้ครบจาก context แต่ไม่ต้องทวนข้อความยาวเกินจำเป็น\n" ;
 
 async function askGroq(userMsg, kbContext) {
   const systemWithContext = kbContext
@@ -38,8 +48,8 @@ async function askGroq(userMsg, kbContext) {
       { role: "system", content: systemWithContext },
       { role: "user",   content: userMsg }
     ],
-    temperature: 0.7,
-    max_tokens: 1024,
+temperature: 0.3,
+max_tokens: 1200,
   });
   return completion.choices[0].message.content;
 }
