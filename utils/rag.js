@@ -3,8 +3,8 @@
 
 const axios = require("axios");
 
-const QDRANT_URL  = process.env.QDRANT_URL  || "http://qdrant:6333";
-const OLLAMA_URL  = process.env.OLLAMA_URL  || "http://ollama:11434";
+const QDRANT_URL = process.env.QDRANT_URL || "http://qdrant:6333";
+const OLLAMA_URL = process.env.OLLAMA_URL || "http://ollama:11434";
 const EMBED_MODEL = "nomic-embed-text";
 const COLLECTION  = "knowledge";
 const TOP_K       = 5; // จำนวน chunks ที่ดึงมา

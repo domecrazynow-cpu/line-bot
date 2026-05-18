@@ -41,14 +41,25 @@ function preprocessMessage(text) {
 }
 
 // ── Ask AI (Groq + KB context) ───────────────────────────────────────────────
+const { searchRAG, isRAGReady } = require("./utils/rag");
+
 async function askAI(userMsg) {
   const cleanMsg = preprocessMessage(userMsg);
-  const hits     = searchKnowledge(cleanMsg);
-  const context  = buildContext(hits);
+  
+  // ค้นหาจาก KB ก่อน
+  const hits    = searchKnowledge(cleanMsg);
+  const context = buildContext(hits);
 
-  if (hits.length) console.log(`[kb] ${hits.length} entries`);
+  // ค้นหาจาก RAG (PDF)
+  let ragContext = null;
+  if (await isRAGReady()) {
+    ragContext = await searchRAG(cleanMsg);
+  }
 
-  return askGroq(cleanMsg, context);
+  // รวม context ทั้งสอง
+  const fullContext = [context, ragContext].filter(Boolean).join("\n\n---\n\n");
+
+  return askGroq(cleanMsg, fullContext || null);
 }
 
 // ── LINE helpers ──────────────────────────────────────────────────────────────
