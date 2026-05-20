@@ -13,37 +13,17 @@ const headers = {
 
 // ── Rich Menu Definition ──────────────────────────────────────────────────────
 const richMenuBody = {
-  size: { width: 2500, height: 1686 },
+  size: { width: 1600, height: 1618 },
   selected: true,
-  name: "Travel Bot Menu",
-  chatBarText: "เมนู 🗺️",
+  name: "FIET Curriculum Menu",
+  chatBarText: "เลือกสาขา 🎓",
   areas: [
-    // Row 1
-    {
-      bounds: { x: 0,    y: 0, width: 833, height: 843 },
-      action: { type: "uri", uri: `https://liff.line.me/${LIFF_ID}`, label: "วางแผนเที่ยว" }
-    },
-    {
-      bounds: { x: 833,  y: 0, width: 834, height: 843 },
-      action: { type: "message", text: "แนะนำสถานที่ลับที่ไม่ค่อยมีคนรู้จัก", label: "สถานที่ลับ" }
-    },
-    {
-      bounds: { x: 1667, y: 0, width: 833, height: 843 },
-      action: { type: "message", text: "มีโปรโมชันอะไรบ้าง", label: "โปรโมชัน" }
-    },
-    // Row 2
-    {
-      bounds: { x: 0,    y: 843, width: 833, height: 843 },
-      action: { type: "message", text: "ลงทะเบียนอีเวนท์", label: "ลงทะเบียน" }
-    },
-    {
-      bounds: { x: 833,  y: 843, width: 834, height: 843 },
-      action: { type: "message", text: "ติดต่อทีม", label: "ติดต่อทีม" }
-    },
-    {
-      bounds: { x: 1667, y: 843, width: 833, height: 843 },
-      action: { type: "message", text: "แนะนำร้านอาหารอร่อยแถวนี้หน่อย", label: "ร้านอาหาร" }
-    }
+    { bounds: { x: 0,   y: 0,   width: 800, height: 1618 },
+      action: { type: "message", text: "ข้อมูลหลักสูตร MTE", label: "MTE" } },
+    { bounds: { x: 800, y: 0,   width: 800, height: 809 },
+      action: { type: "message", text: "ข้อมูลหลักสูตร ETE", label: "ETE" } },
+    { bounds: { x: 800, y: 809, width: 800, height: 809 },
+      action: { type: "message", text: "ข้อมูลหลักสูตร CTE", label: "CTE" } },
   ]
 };
 
@@ -120,20 +100,17 @@ async function uploadMenuImage(richMenuId) {
 async function generatePlaceholderMenu(richMenuId) {
   try {
     const { createCanvas } = require("canvas");
-    const canvas = createCanvas(2500, 1686);
+    const canvas = createCanvas(1600, 1618);
     const ctx    = canvas.getContext("2d");
 
     // Background
     ctx.fillStyle = "#1a1a2e";
-    ctx.fillRect(0, 0, 2500, 1686);
+    ctx.fillRect(0, 0, 1600, 1618);
 
     const buttons = [
-      { x: 0,    y: 0,   w: 833, h: 843, emoji: "🗺️",  label: "วางแผนเที่ยว",    color: "#06C755" },
-      { x: 833,  y: 0,   w: 834, h: 843, emoji: "🔍",  label: "สถานที่ลับ",       color: "#0099ff" },
-      { x: 1667, y: 0,   w: 833, h: 843, emoji: "🎁",  label: "โปรโมชัน",         color: "#ff6b6b" },
-      { x: 0,    y: 843, w: 833, h: 843, emoji: "📅",  label: "ลงทะเบียนอีเวนท์", color: "#f5a623" },
-      { x: 833,  y: 843, w: 834, h: 843, emoji: "📞",  label: "ติดต่อทีม",         color: "#9b59b6" },
-      { x: 1667, y: 843, w: 833, h: 843, emoji: "🍜",  label: "ร้านอาหาร",         color: "#e67e22" },
+      { x: 0,   y: 0,   w: 800, h: 1618, emoji: "⚙️", label: "MTE", color: "#2563eb" },
+      { x: 800, y: 0,   w: 800, h: 809,  emoji: "⚡", label: "ETE", color: "#f59e0b" },
+      { x: 800, y: 809, w: 800, h: 809,  emoji: "🏗️", label: "CTE", color: "#10b981" },
     ];
 
     for (const btn of buttons) {
@@ -162,9 +139,8 @@ async function generatePlaceholderMenu(richMenuId) {
     ctx.strokeStyle = "#ffffff22";
     ctx.lineWidth   = 4;
     ctx.beginPath();
-    ctx.moveTo(833, 0); ctx.lineTo(833, 1686);
-    ctx.moveTo(1667, 0); ctx.lineTo(1667, 1686);
-    ctx.moveTo(0, 843); ctx.lineTo(2500, 843);
+    ctx.moveTo(800, 0); ctx.lineTo(800, 1618);
+    ctx.moveTo(800, 809); ctx.lineTo(1600, 809);
     ctx.stroke();
 
     const buffer = canvas.toBuffer("image/png");
@@ -176,7 +152,7 @@ async function generatePlaceholderMenu(richMenuId) {
     console.log("[menu] สร้างรูป placeholder สำเร็จ");
   } catch (err) {
     console.log("[menu] ⚠️ ไม่สามารถสร้างรูปได้ — ติดตั้ง canvas: npm install canvas");
-    console.log("[menu] หรือวางรูป 2500x1686px ไว้ที่ public/richmenu.png แล้ว restart");
+    console.log("[menu] หรือวางรูป 1600x1618px ไว้ที่ public/richmenu.png แล้ว restart");
   }
 }
 
@@ -416,18 +392,79 @@ function makeEventCarousel(events) {
   };
 }
 
+// ── Branch Carousel ───────────────────────────────────────────────────────────
+function makeBranchCarousel() {
+  const branches = [
+    { code: "MTE", emoji: "⚙️", name: "ครุศาสตร์เครื่องกล", english: "Mechanical Technology Education", color: "#2563eb" },
+    { code: "ETE", emoji: "⚡", name: "ครุศาสตร์ไฟฟ้า", english: "Electrical Technology Education", color: "#f59e0b" },
+    { code: "CTE", emoji: "🏗️", name: "ครุศาสตร์โยธา", english: "Civil Technology Education", color: "#10b981" },
+    { code: "IEd", emoji: "🏭", name: "ครุศาสตร์อุตสาหการ", english: "Industrial Technology Education", color: "#ef4444" },
+    { code: "PPT", emoji: "🖨️", name: "เทคโนโลยีการพิมพ์และบรรจุภัณฑ์", english: "Printing and Packaging Technology", color: "#8b5cf6" },
+    { code: "ECT", emoji: "💻", name: "เทคโนโลยีและสื่อสารการศึกษา", english: "Educational Communications and Technology", color: "#06b6d4" },
+  ];
+
+  const bubbles = branches.map(branch => ({
+    type: "bubble",
+    size: "kilo",
+    body: {
+      type: "box",
+      layout: "vertical",
+      paddingAll: "16px",
+      contents: [
+        {
+          type: "box",
+          layout: "vertical",
+          backgroundColor: branch.color,
+          cornerRadius: "8px",
+          paddingAll: "14px",
+          contents: [
+            { type: "text", text: `${branch.emoji} ${branch.code}`, color: "#ffffff", size: "xl", weight: "bold" },
+            { type: "text", text: branch.name, color: "#ffffff", size: "sm", weight: "bold", wrap: true, margin: "sm" },
+          ]
+        },
+        {
+          type: "text",
+          text: branch.english,
+          size: "xs",
+          color: "#6b7280",
+          wrap: true,
+          margin: "md"
+        }
+      ]
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      paddingAll: "12px",
+      contents: [{
+        type: "button",
+        style: "primary",
+        color: branch.color,
+        height: "sm",
+        action: { type: "message", label: "ดูข้อมูลหลักสูตร", text: `ข้อมูลหลักสูตร ${branch.code}` }
+      }]
+    }
+  }));
+
+  return {
+    type: "flex",
+    altText: "เลือกสาขาหลักสูตร FIET",
+    contents: { type: "carousel", contents: bubbles }
+  };
+}
+
 // ── Quick Reply ───────────────────────────────────────────────────────────────
 function withQuickReply(message) {
   return {
     ...message,
     quickReply: {
       items: [
-        { type: "action", action: { type: "uri",     label: "🗺️ วางแผนเที่ยว",    uri: `https://liff.line.me/${LIFF_ID}` } },
-        { type: "action", action: { type: "message", label: "🔍 สถานที่ลับ",        text: "แนะนำสถานที่ลับที่ไม่ค่อยมีคนรู้จัก" } },
-        { type: "action", action: { type: "message", label: "🎁 โปรโมชัน",          text: "มีโปรโมชันอะไรบ้าง" } },
-        { type: "action", action: { type: "message", label: "📅 อีเวนท์",           text: "ลงทะเบียนอีเวนท์" } },
-        { type: "action", action: { type: "message", label: "🍜 ร้านอาหาร",         text: "แนะนำร้านอาหารอร่อยแถวนี้หน่อย" } },
-        { type: "action", action: { type: "message", label: "📞 ติดต่อทีม",          text: "ติดต่อทีม" } },
+        { type: "action", action: { type: "message", label: "⚙️ MTE", text: "ข้อมูลหลักสูตร MTE" } },
+        { type: "action", action: { type: "message", label: "⚡ ETE", text: "ข้อมูลหลักสูตร ETE" } },
+        { type: "action", action: { type: "message", label: "🏗️ CTE", text: "ข้อมูลหลักสูตร CTE" } },
+        { type: "action", action: { type: "message", label: "🏭 IEd", text: "ข้อมูลหลักสูตร IEd" } },
+        { type: "action", action: { type: "message", label: "🖨️ PPT", text: "ข้อมูลหลักสูตร PPT" } },
+        { type: "action", action: { type: "message", label: "💻 ECT", text: "ข้อมูลหลักสูตร ECT" } },
       ]
     }
   };
@@ -438,5 +475,7 @@ module.exports = {
   makePlaceCarousel,
   makePromoCarousel,
   makeEventCarousel,
+  makeBranchCarousel,
   withQuickReply
 };
+

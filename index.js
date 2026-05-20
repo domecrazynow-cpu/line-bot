@@ -16,7 +16,7 @@ const {
 } = require("./utils/knowledge");
 const {
   setupRichMenu, makePlaceCarousel,
-  makePromoCarousel, makeEventCarousel, withQuickReply
+  makePromoCarousel, makeEventCarousel, makeBranchCarousel, withQuickReply
 } = require("./utils/lineMenu");
 
 const app    = express();
@@ -47,6 +47,14 @@ const majorMap = {
   IED: "ครุศาสตร์อุตสาหการ Industrial Technology Education",
   PPT: "เทคโนโลยีการพิมพ์และบรรจุภัณฑ์ Printing and Packaging Technology",
   ECT: "เทคโนโลยีและสื่อสารการศึกษา Educational Communications and Technology",
+};
+const BRANCHES = {
+  MTE: "ครุศาสตร์เครื่องกล (Mechanical Technology Education)",
+  ETE: "ครุศาสตร์ไฟฟ้า (Electrical Technology Education)",
+  CTE: "ครุศาสตร์โยธา (Civil Technology Education)",
+  IED: "ครุศาสตร์อุตสาหการ (Industrial Technology Education)",
+  PPT: "เทคโนโลยีการพิมพ์และบรรจุภัณฑ์ (Printing and Packaging Technology)",
+  ECT: "เทคโนโลยีและสื่อสารการศึกษา (Educational Communications and Technology)",
 };
 
 // ── Ask AI (Groq + KB context) ───────────────────────────────────────────────
@@ -269,6 +277,20 @@ app.post("/webhook", async (req, res) => {
     }
 
     // ── Special Commands ──────────────────────────────────────────────────────
+    if (["เมนู", "เลือกสาขา", "ข้อมูลหลักสูตร", "หลักสูตร", "สาขา"].includes(userText)) {
+      await sendLine(event.replyToken, [makeBranchCarousel()]);
+      continue;
+    }
+
+    // ── 6 สาขา ───────────────────────────────────────────────────────────────
+    const branchMatch = userText.match(/(?:ข้อมูลหลักสูตร\s*)?(MTE|ETE|CTE|IEd|IED|PPT|ECT)\b/i);
+    if (branchMatch) {
+      const branchCode = branchMatch[1].toUpperCase();
+      const branchName = BRANCHES[branchCode];
+      const reply = await askAI(`ข้อมูลหลักสูตร ${branchCode} ${branchName}`);
+      await sendLine(event.replyToken, [withQuickReply(textMsg(reply))]);
+      continue;
+    }
 
     // ข้อความจาก LIFF trip plan (ยาว / มี markdown) — ไม่ตอบ
     if (
@@ -400,4 +422,5 @@ app.listen(PORT, async () => {
     await setupRichMenu();
   }
 });
+
 
