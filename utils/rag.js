@@ -1,64 +1,105 @@
 // utils/rag.js
-// ค้นหาข้อมูลจาก Qdrant Vector DB
-
 const axios = require("axios");
 
 const QDRANT_URL = process.env.QDRANT_URL || "http://qdrant:6333";
 const OLLAMA_URL = process.env.OLLAMA_URL || "http://ollama:11434";
 const EMBED_MODEL = "nomic-embed-text";
 const COLLECTION  = "knowledge";
-const TOP_K       = 3; // จำนวน chunks ที่ดึงมา
+const TOP_K       = 5;
 
-/**
- * แปลงข้อความเป็น embedding
- */
+// ── Embedding cache (in-memory) ────────────────────────────────────────────────
+// ป้องกันการ embed คำถามเดิมซ้ำๆ ทำให้เร็วขึ้นมาก
+const embedCache = new Map();
+const CACHE_MAX  = 200;
+
 async function getEmbedding(text) {
-  const res = await axios.post(`${OLLAMA_URL}/api/embeddings`, {
-    model: EMBED_MODEL,
-    prompt: text
-  });
-  return res.data.embedding;
+  const key = text.trim().slice(0, 200);
+  if (embedCache.has(key)) {
+    console.log("[rag] cache hit");
+    return embedCache.get(key);
+  }
+
+  const res = await axios.post(
+    `${OLLAMA_URL}/api/embeddings`,
+    { model: EMBED_MODEL, prompt: text },
+    { timeout: 15000 } // timeout 15s — ถ้า Ollama ช้าเกินนี้ถือว่าล้มเหลว
+  );
+
+  const embedding = res.data.embedding;
+
+  // จำกัดขนาด cache
+  if (embedCache.size >= CACHE_MAX) {
+    const firstKey = embedCache.keys().next().value;
+    embedCache.delete(firstKey);
+  }
+  embedCache.set(key, embedding);
+
+  return embedding;
 }
 
-/**
- * ค้นหาข้อมูลที่เกี่ยวข้องจาก Qdrant
- */
+// ── ค้นหาจาก Qdrant ───────────────────────────────────────────────────────────
 async function searchRAG(query) {
   try {
     const vector = await getEmbedding(query);
+
     const res = await axios.post(
       `${QDRANT_URL}/collections/${COLLECTION}/points/search`,
-      { vector, limit: TOP_K, with_payload: true }
+      { vector, limit: TOP_K, with_payload: true },
+      { timeout: 5000 }
     );
 
     const results = res.data.result || [];
     if (!results.length) return null;
 
-    // รวม context จากทุก chunk
-const context = results
-  .map(r => `[จาก: ${r.payload.source}]\n${r.payload.text}`)
-  .join("\n\n---\n\n")
-  .slice(0, 4500);
+    // กรองเฉพาะ results ที่มี score สูงพอ (relevance threshold)
+    const relevant = results.filter(r => r.score > 0.5);
+    if (!relevant.length) {
+      console.log("[rag] no relevant results (score < 0.5)");
+      return null;
+    }
 
+    const context = relevant
+      .map(r => `[จาก: ${r.payload.source}]\n${r.payload.text}`)
+      .join("\n\n---\n\n")
+      .slice(0, 4500);
+
+    console.log(`[rag] found ${relevant.length} chunks, score: ${relevant[0].score.toFixed(3)}`);
     return context;
+
   } catch (err) {
-    console.error("[rag] Search failed:", err.message);
+    if (err.code === "ECONNABORTED") {
+      console.error("[rag] Ollama timeout — ข้ามไปตอบด้วย Groq อย่างเดียว");
+    } else {
+      console.error("[rag] Search failed:", err.message);
+    }
     return null;
   }
 }
 
-/**
- * เช็คว่า Qdrant พร้อมใช้งานไหม
- */
+// ── เช็คสถานะ Qdrant ──────────────────────────────────────────────────────────
+// Cache ผล isRAGReady ไว้ 60 วินาที ไม่ต้องเช็คทุก request
+let ragReadyCache     = null;
+let ragReadyCacheTime = 0;
+const RAG_CACHE_TTL   = 60_000; // 60 seconds
+
 async function isRAGReady() {
+  const now = Date.now();
+  if (ragReadyCache !== null && now - ragReadyCacheTime < RAG_CACHE_TTL) {
+    return ragReadyCache;
+  }
+
   try {
-    const res = await axios.get(
+    const res   = await axios.get(
       `${QDRANT_URL}/collections/${COLLECTION}`,
       { timeout: 3000 }
     );
     const count = res.data.result?.points_count || 0;
-    return count > 0;
+    ragReadyCache     = count > 0;
+    ragReadyCacheTime = now;
+    return ragReadyCache;
   } catch {
+    ragReadyCache     = false;
+    ragReadyCacheTime = now;
     return false;
   }
 }
