@@ -1,85 +1,179 @@
 // utils/lineMenu.js
-// Rich Menu + Flex Message templates สำหรับ LINE Bot
+// LINE Rich Menu + Flex Templates (FIXED VERSION)
 
 const axios = require("axios");
 
 const LINE_TOKEN = process.env.LINE_TOKEN;
-const LIFF_ID    = process.env.LIFF_ID;
 
 const headers = {
   Authorization: `Bearer ${LINE_TOKEN}`,
   "Content-Type": "application/json"
 };
 
-// ── Rich Menu Definition ──────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// Rich Menu Definition (LINE VALID SIZE)
+// รองรับเฉพาะ:
+// 2500 x 843
+// 2500 x 1686
+// ─────────────────────────────────────────────────────────────
+
 const richMenuBody = {
-  size: { width: 1600, height: 1618 },
+  size: {
+    width: 2500,
+    height: 1686
+  },
+
   selected: true,
-  name: "FIET Curriculum Menu",
-  chatBarText: "เลือกสาขา 🎓",
+
+  name: "FIET Main Menu",
+
+  chatBarText: "เมนู FIET 🎓",
+
   areas: [
-    { bounds: { x: 0,   y: 0,   width: 800, height: 1618 },
-      action: { type: "message", text: "ข้อมูลหลักสูตร MTE", label: "MTE" } },
-    { bounds: { x: 800, y: 0,   width: 800, height: 809 },
-      action: { type: "message", text: "ข้อมูลหลักสูตร ETE", label: "ETE" } },
-    { bounds: { x: 800, y: 809, width: 800, height: 809 },
-      action: { type: "message", text: "ข้อมูลหลักสูตร CTE", label: "CTE" } },
+    // LEFT BIG
+    {
+      bounds: {
+        x: 0,
+        y: 0,
+        width: 1250,
+        height: 1686
+      },
+
+      action: {
+        type: "postback",
+        label: "หลักสูตร",
+        data: "action=course"
+      }
+    },
+
+    // RIGHT TOP
+    {
+      bounds: {
+        x: 1250,
+        y: 0,
+        width: 1250,
+        height: 843
+      },
+
+      action: {
+        type: "postback",
+        label: "ค่าเทอม",
+        data: "action=tuition"
+      }
+    },
+
+    // RIGHT BOTTOM
+    {
+      bounds: {
+        x: 1250,
+        y: 843,
+        width: 1250,
+        height: 843
+      },
+
+      action: {
+        type: "postback",
+        label: "ติดต่อคณะ",
+        data: "action=contact"
+      }
+    }
   ]
 };
 
-// ── Create & Set Rich Menu ────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// Setup Rich Menu
+// ─────────────────────────────────────────────────────────────
+
 async function setupRichMenu() {
   try {
-    // 1. ลบ Rich Menu เก่าทั้งหมด
+
+    console.log("[menu] 🚀 Creating Rich Menu...");
+
+    // ลบเฉพาะ menu ที่ชื่อเดียวกัน
     const existing = await axios.get(
       "https://api.line.me/v2/bot/richmenu/list",
       { headers }
     );
-    for (const menu of existing.data.richmenus || []) {
-      await axios.delete(`https://api.line.me/v2/bot/richmenu/${menu.richMenuId}`, { headers });
-      console.log(`[menu] ลบ menu เก่า: ${menu.richMenuId}`);
+
+    const oldMenus = existing.data.richmenus || [];
+
+    for (const menu of oldMenus) {
+
+      if (menu.name === "FIET Main Menu") {
+
+        await axios.delete(
+          `https://api.line.me/v2/bot/richmenu/${menu.richMenuId}`,
+          { headers }
+        );
+
+        console.log("[menu] 🗑 Deleted:", menu.richMenuId);
+      }
     }
 
-    // 2. สร้าง Rich Menu ใหม่
+    // Create new rich menu
     const created = await axios.post(
       "https://api.line.me/v2/bot/richmenu",
       richMenuBody,
       { headers }
     );
-    const richMenuId = created.data.richMenuId;
-    console.log(`[menu] สร้าง Rich Menu: ${richMenuId}`);
 
-    // 3. Upload รูป placeholder (ถ้าไม่มีรูป จะเป็นพื้นสีเขียว)
+    const richMenuId = created.data.richMenuId;
+
+    console.log("[menu] ✅ Created:", richMenuId);
+
+    // Upload image
     await uploadMenuImage(richMenuId);
 
-    // 4. Set เป็น default
+    // Set default
     await axios.post(
       `https://api.line.me/v2/bot/user/all/richmenu/${richMenuId}`,
       {},
       { headers }
     );
-    console.log(`[menu] ✅ Rich Menu พร้อมใช้งาน!`);
+
+    console.log("[menu] 🎉 Rich Menu Ready");
+
     return richMenuId;
+
   } catch (err) {
-    console.error("[menu] ❌ สร้าง Rich Menu ไม่ได้:", err.response?.data || err.message);
+
+    console.error(
+      "[menu] ❌ ERROR:",
+      err.response?.data || err.message
+    );
   }
 }
 
-// ── Upload Menu Image ─────────────────────────────────────────────────────────
-async function uploadMenuImage(richMenuId) {
-  try {
-    const fs   = require("fs");
-    const path = require("path");
-    const imgPath = path.join(__dirname, "../public/richmenu.png");
+// ─────────────────────────────────────────────────────────────
+// Upload Rich Menu Image
+// ─────────────────────────────────────────────────────────────
 
+async function uploadMenuImage(richMenuId) {
+
+  try {
+
+    const fs = require("fs");
+    const path = require("path");
+
+    const imgPath = path.join(
+      __dirname,
+      "../public/richmenu.png"
+    );
+
+    // ถ้าไม่มีรูป → generate placeholder
     if (!fs.existsSync(imgPath)) {
-      console.log("[menu] ⚠️ ไม่พบ public/richmenu.png — ใช้รูป placeholder");
-      // สร้างรูป placeholder ด้วย Canvas (ถ้าไม่มีรูปจริง)
+
+      console.log(
+        "[menu] ⚠️ richmenu.png not found → generating placeholder"
+      );
+
       await generatePlaceholderMenu(richMenuId);
+
       return;
     }
 
     const imageData = fs.readFileSync(imgPath);
+
     await axios.post(
       `https://api-data.line.me/v2/bot/richmenu/${richMenuId}/content`,
       imageData,
@@ -90,72 +184,147 @@ async function uploadMenuImage(richMenuId) {
         }
       }
     );
-    console.log("[menu] อัปโหลดรูป Rich Menu สำเร็จ");
+
+    console.log("[menu] ✅ Image uploaded");
+
   } catch (err) {
-    console.error("[menu] อัปโหลดรูปไม่ได้:", err.message);
+
+    console.error(
+      "[menu] ❌ Upload failed:",
+      err.response?.data || err.message
+    );
   }
 }
 
-// ── Generate Placeholder Menu Image ──────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// Generate Placeholder Image
+// ─────────────────────────────────────────────────────────────
+
 async function generatePlaceholderMenu(richMenuId) {
+
   try {
+
     const { createCanvas } = require("canvas");
-    const canvas = createCanvas(1600, 1618);
-    const ctx    = canvas.getContext("2d");
+
+    const canvas = createCanvas(2500, 1686);
+
+    const ctx = canvas.getContext("2d");
 
     // Background
-    ctx.fillStyle = "#1a1a2e";
-    ctx.fillRect(0, 0, 1600, 1618);
+    ctx.fillStyle = "#111827";
+    ctx.fillRect(0, 0, 2500, 1686);
 
     const buttons = [
-      { x: 0,   y: 0,   w: 800, h: 1618, emoji: "⚙️", label: "MTE", color: "#2563eb" },
-      { x: 800, y: 0,   w: 800, h: 809,  emoji: "⚡", label: "ETE", color: "#f59e0b" },
-      { x: 800, y: 809, w: 800, h: 809,  emoji: "🏗️", label: "CTE", color: "#10b981" },
+
+      {
+        x: 0,
+        y: 0,
+        w: 1250,
+        h: 1686,
+        emoji: "🎓",
+        label: "หลักสูตร",
+        color: "#2563eb"
+      },
+
+      {
+        x: 1250,
+        y: 0,
+        w: 1250,
+        h: 843,
+        emoji: "💰",
+        label: "ค่าเทอม",
+        color: "#f59e0b"
+      },
+
+      {
+        x: 1250,
+        y: 843,
+        w: 1250,
+        h: 843,
+        emoji: "☎️",
+        label: "ติดต่อคณะ",
+        color: "#10b981"
+      }
     ];
 
     for (const btn of buttons) {
-      // Button background
-      ctx.fillStyle = btn.color + "33";
-      ctx.fillRect(btn.x + 4, btn.y + 4, btn.w - 8, btn.h - 8);
 
-      // Border
-      ctx.strokeStyle = btn.color;
-      ctx.lineWidth   = 6;
-      ctx.strokeRect(btn.x + 4, btn.y + 4, btn.w - 8, btn.h - 8);
+      // Background
+      ctx.fillStyle = btn.color;
+      ctx.fillRect(
+        btn.x + 8,
+        btn.y + 8,
+        btn.w - 16,
+        btn.h - 16
+      );
 
       // Emoji
-      ctx.font      = "180px Arial";
-      ctx.textAlign = "center";
+      ctx.font = "220px Arial";
       ctx.fillStyle = "#ffffff";
-      ctx.fillText(btn.emoji, btn.x + btn.w / 2, btn.y + btn.h / 2 - 60);
+      ctx.textAlign = "center";
+
+      ctx.fillText(
+        btn.emoji,
+        btn.x + btn.w / 2,
+        btn.y + btn.h / 2 - 80
+      );
 
       // Label
-      ctx.font      = "bold 90px Arial";
-      ctx.fillStyle = "#ffffff";
-      ctx.fillText(btn.label, btn.x + btn.w / 2, btn.y + btn.h / 2 + 120);
+      ctx.font = "bold 110px Arial";
+
+      ctx.fillText(
+        btn.label,
+        btn.x + btn.w / 2,
+        btn.y + btn.h / 2 + 120
+      );
     }
 
     // Grid lines
-    ctx.strokeStyle = "#ffffff22";
-    ctx.lineWidth   = 4;
+    ctx.strokeStyle = "#ffffff44";
+    ctx.lineWidth = 6;
+
     ctx.beginPath();
-    ctx.moveTo(800, 0); ctx.lineTo(800, 1618);
-    ctx.moveTo(800, 809); ctx.lineTo(1600, 809);
+
+    ctx.moveTo(1250, 0);
+    ctx.lineTo(1250, 1686);
+
+    ctx.moveTo(1250, 843);
+    ctx.lineTo(2500, 843);
+
     ctx.stroke();
 
     const buffer = canvas.toBuffer("image/png");
+
     await axios.post(
       `https://api-data.line.me/v2/bot/richmenu/${richMenuId}/content`,
       buffer,
-      { headers: { Authorization: `Bearer ${LINE_TOKEN}`, "Content-Type": "image/png" } }
+      {
+        headers: {
+          Authorization: `Bearer ${LINE_TOKEN}`,
+          "Content-Type": "image/png"
+        }
+      }
     );
-    console.log("[menu] สร้างรูป placeholder สำเร็จ");
+
+    console.log("[menu] ✅ Placeholder generated");
+
   } catch (err) {
-    console.log("[menu] ⚠️ ไม่สามารถสร้างรูปได้ — ติดตั้ง canvas: npm install canvas");
-    console.log("[menu] หรือวางรูป 1600x1618px ไว้ที่ public/richmenu.png แล้ว restart");
+
+    console.log(
+      "[menu] ❌ canvas missing"
+    );
+
+    console.log(
+      "npm install canvas"
+    );
+
+    console.log(err.message);
   }
 }
 
+module.exports = {
+  setupRichMenu
+};
 // ── Flex Message: Place Carousel ──────────────────────────────────────────────
 function makePlaceCarousel(places) {
   const bubbles = places.map(p => ({

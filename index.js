@@ -56,18 +56,51 @@ const BRANCHES = {
   PPT: "เทคโนโลยีการพิมพ์และบรรจุภัณฑ์ (Printing and Packaging Technology)",
   ECT: "เทคโนโลยีและสื่อสารการศึกษา (Educational Communications and Technology)",
 };
+const majorAliases = [
+  { code: "MTE", terms: ["MTE", "ครูเครื่องกล", "เครื่องกล", "ครุศาสตร์เครื่องกล", "mechanical"] },
+  { code: "ETE", terms: ["ETE", "ครูไฟฟ้า", "ไฟฟ้า", "ครุศาสตร์ไฟฟ้า", "electrical"] },
+  { code: "CTE", terms: ["CTE", "ครูโยธา", "โยธา", "ครุศาสตร์โยธา", "civil"] },
+  { code: "IED", terms: ["IED", "IEd", "ครูอุต", "อุตสาหการ", "ครุศาสตร์อุตสาหการ", "industrial"] },
+  { code: "PPT", terms: ["PPT", "การพิมพ์", "บรรจุภัณฑ์", "พิมพ์", "printing", "packaging"] },
+  { code: "ECT", terms: ["ECT", "สื่อสารการศึกษา", "เทคโนโลยีและสื่อสาร", "สื่อ", "educational communications"] },
+];
+
+function detectMajorKey(text) {
+  const raw = text.trim();
+  const upper = raw.toUpperCase();
+
+  for (const code of Object.keys(majorMap)) {
+    if (upper.includes(code)) return code;
+  }
+
+  const lower = raw.toLowerCase();
+  const found = majorAliases.find(({ terms }) =>
+    terms.some(term => lower.includes(term.toLowerCase()))
+  );
+
+  return found?.code || null;
+}
 
 // ── Ask AI (Groq + KB context) ───────────────────────────────────────────────
 const { searchRAG, isRAGReady } = require("./utils/rag");
 
 function buildRagQuery(cleanMsg) {
-  const upperMsg = cleanMsg.trim().toUpperCase();
-  const majorKey = Object.keys(majorMap).find(code => upperMsg.includes(code));
-
+  const majorKey = detectMajorKey(cleanMsg);
   const topicHints = [];
 
-  if (cleanMsg.includes("เรียนอะไร") || cleanMsg.includes("รายวิชา") || cleanMsg.includes("วิชาบังคับ")) {
-    topicHints.push("รายวิชา หมวดวิชาเฉพาะ วิชาบังคับ หน่วยกิต โครงสร้างหลักสูตร");
+  if (
+    cleanMsg.includes("เรียนอะไร") ||
+    cleanMsg.includes("เรียนไร") ||
+    cleanMsg.includes("เรียนบ้าง") ||
+    cleanMsg.includes("รายวิชา") ||
+    cleanMsg.includes("วิชาบังคับ") ||
+    cleanMsg.includes("กี่วิชา")
+  ) {
+    topicHints.push("รายวิชา วิชาบังคับ วิชาเฉพาะ หน่วยกิต โครงสร้างหลักสูตร แผนการเรียน");
+  }
+
+  if (cleanMsg.includes("ยาก") || cleanMsg.includes("ระวัง") || cleanMsg.includes("ไม่ควรขาด") || cleanMsg.includes("ขาด")) {
+    topicHints.push("รายวิชาสำคัญ วิชาพื้นฐาน วิชาต่อเนื่อง เงื่อนไขรายวิชา แผนการเรียน");
   }
 
   if (cleanMsg.includes("คุณสมบัติ") || cleanMsg.includes("สมัคร") || cleanMsg.includes("รับเข้า")) {
@@ -87,7 +120,6 @@ function buildRagQuery(cleanMsg) {
     ...topicHints,
   ].join(" ");
 }
-
 async function askAI(userMsg) {
   const cleanMsg = preprocessMessage(userMsg);
   const queryMsg = buildRagQuery(cleanMsg);
@@ -277,8 +309,20 @@ app.post("/webhook", async (req, res) => {
     }
 
     // ── Special Commands ──────────────────────────────────────────────────────
-    if (["เมนู", "เลือกสาขา", "ข้อมูลหลักสูตร", "หลักสูตร", "สาขา"].includes(userText)) {
+    if (["เมนู", "เลือกสาขา", "ข้อมูลหลักสูตร", "หลักสูตร", "สาขา", "เมนูหลักสูตร"].includes(userText)) {
       await sendLine(event.replyToken, [makeBranchCarousel()]);
+      continue;
+    }
+
+    if (userText === "ค่าเทอม" || userText === "ค่าธรรมเนียม") {
+      const reply = await askAI("ค่าเทอม ค่าธรรมเนียมการศึกษา FIET แต่ละสาขา");
+      await sendLine(event.replyToken, [withQuickReply(textMsg(reply))]);
+      continue;
+    }
+
+    if (userText === "ติดต่อคณะ") {
+      const reply = await askAI("ข้อมูลติดต่อคณะครุศาสตร์อุตสาหกรรมและเทคโนโลยี FIET KMUTT");
+      await sendLine(event.replyToken, [withQuickReply(textMsg(reply))]);
       continue;
     }
 
@@ -291,7 +335,6 @@ app.post("/webhook", async (req, res) => {
       await sendLine(event.replyToken, [withQuickReply(textMsg(reply))]);
       continue;
     }
-
     // ข้อความจาก LIFF trip plan (ยาว / มี markdown) — ไม่ตอบ
     if (
       userText.startsWith("**เช้า") ||

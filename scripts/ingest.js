@@ -2,6 +2,7 @@
 require("dotenv").config();
 const fs      = require("fs");
 const path    = require("path");
+const crypto  = require("crypto");
 const axios   = require("axios");
 const mammoth = require("mammoth");
 
@@ -12,6 +13,8 @@ const COLLECTION    = "knowledge";
 const PDF_DIR       = process.env.PDF_DIR || path.join(__dirname, "../pdfs");
 const CHUNK_SIZE    = 500;
 const CHUNK_OVERLAP = 100;
+const VECTOR_SIZE   = 768;
+const UPSERT_BATCH_SIZE = 10;
 
 // ── อ่าน PDF ──────────────────────────────────────────────────────────────────
 async function extractPDF(filePath) {
@@ -68,7 +71,7 @@ async function getEmbedding(text) {
 async function createCollection() {
   try {
     await axios.put(`${QDRANT_URL}/collections/${COLLECTION}`, {
-      vectors: { size: 768, distance: "Cosine" }
+      vectors: { size: VECTOR_SIZE, distance: "Cosine" }
     });
     console.log(`[qdrant] Collection created`);
   } catch (err) {
@@ -78,19 +81,63 @@ async function createCollection() {
   }
 }
 
+function pointId(source, index) {
+  const hash = crypto.createHash("sha1").update(`${source}:${index}`).digest("hex");
+  return [
+    hash.slice(0, 8),
+    hash.slice(8, 12),
+    `4${hash.slice(13, 16)}`,
+    ((parseInt(hash.slice(16, 18), 16) & 0x3f) | 0x80).toString(16).padStart(2, "0") + hash.slice(18, 20),
+    hash.slice(20, 32),
+  ].join("-");
+}
+
+function isValidVector(vector) {
+  return Array.isArray(vector) &&
+    vector.length === VECTOR_SIZE &&
+    vector.every(Number.isFinite);
+}
+
+function qdrantErrorMessage(err) {
+  if (err.response?.data) return JSON.stringify(err.response.data);
+  return err.message;
+}
+
+async function upsertPoints(points, source, endingChunk) {
+  try {
+    await axios.put(`${QDRANT_URL}/collections/${COLLECTION}/points`, { points });
+    return;
+  } catch (err) {
+    console.error(`\n[qdrant] Batch upsert failed: ${qdrantErrorMessage(err)}`);
+    console.error(`[qdrant] Retrying one-by-one: source=${source}, ending chunk=${endingChunk}, points=${points.length}`);
+  }
+
+  for (const point of points) {
+    try {
+      await axios.put(`${QDRANT_URL}/collections/${COLLECTION}/points`, { points: [point] });
+    } catch (err) {
+      console.error(`[warn] skip point ${point.id} source=${point.payload.source} chunk=${point.payload.chunk}: ${qdrantErrorMessage(err)}`);
+    }
+  }
+}
+
 // ── บันทึกลง Qdrant ───────────────────────────────────────────────────────────
 async function upsertChunks(chunks) {
   const points = [];
   for (let i = 0; i < chunks.length; i++) {
     process.stdout.write(`\r[embed] ${i+1}/${chunks.length} chunks...`);
     const vector = await getEmbedding(chunks[i].text);
+    if (!isValidVector(vector)) {
+      console.error(`\n[warn] skip invalid embedding source=${chunks[i].source} chunk=${i + 1} size=${vector?.length || 0}`);
+      continue;
+    }
     points.push({
-      id:      Date.now() + i,
+      id:      pointId(chunks[i].source, i),
       vector,
-      payload: { text: chunks[i].text, source: chunks[i].source }
+      payload: { text: chunks[i].text, source: chunks[i].source, chunk: i + 1 }
     });
-    if (points.length >= 10 || i === chunks.length - 1) {
-      await axios.put(`${QDRANT_URL}/collections/${COLLECTION}/points`, { points });
+    if (points.length >= UPSERT_BATCH_SIZE || i === chunks.length - 1) {
+      await upsertPoints(points, chunks[i].source, i + 1);
       points.length = 0;
     }
   }
