@@ -9,9 +9,11 @@ const BOT_URL        = "http://app:3000";
 const CHECK_INTERVAL = 30000; // เช็คทุก 30 วินาที
 const BROADCAST_URL  = "https://api.line.me/v2/bot/message/broadcast";
 
-let wasDown    = false;
-let downTime   = null;
-let checkCount = 0;
+let wasDown      = false;
+let downTime     = null;
+let checkCount   = 0;
+let failStreak   = 0;
+const FAIL_THRESHOLD = 3;
 
 // ── แจ้ง users ทุกคนผ่าน LINE Broadcast ──────────────────────────────────────
 async function notify(message) {
@@ -42,6 +44,8 @@ async function checkHealth() {
   try {
     await axios.get(BOT_URL, { timeout: 5000 });
 
+    failStreak = 0;
+
     // ระบบกลับมาหลังจากล่ม
     if (wasDown) {
       const duration = getDownDuration();
@@ -62,19 +66,20 @@ async function checkHealth() {
     }
 
   } catch (err) {
-    // ระบบล่มครั้งแรก
-    if (!wasDown) {
+    failStreak++;
+    console.error(`[watchdog] ❌ Fail #${failStreak}:`, err.message);
+
+    if (failStreak >= FAIL_THRESHOLD && !wasDown) {
       wasDown  = true;
       downTime = Date.now();
-      console.error("[watchdog] ❌ Bot is DOWN:", err.message);
       await notify(
         "⚠️ ระบบขัดข้องชั่วคราวครับ!\n\n" +
         "🔧 กำลังแก้ไขและฟื้นฟูระบบอัตโนมัติ\n" +
         "⏰ เวลา: " + new Date().toLocaleString("th-TH", { timeZone: "Asia/Bangkok" }) + "\n\n" +
         "กรุณารอสักครู่ ระบบจะกลับมาโดยอัตโนมัติครับ 🙏"
       );
-    } else {
-      console.error(`[watchdog] ❌ Still DOWN (${getDownDuration()}):`, err.message);
+    } else if (wasDown) {
+      console.error(`[watchdog] ❌ Still DOWN (${getDownDuration()})`);
     }
   }
 }

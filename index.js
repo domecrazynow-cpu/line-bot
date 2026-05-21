@@ -3,10 +3,12 @@ const express = require("express");
 const axios   = require("axios");
 const path    = require("path");
 const multer  = require("multer");
+const crypto  = require("crypto");
+const fs      = require("fs");
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
 const { autoConvertFont }          = require("./utils/fontConvert");
-const { addSlang }                 = require("./utils/normalizeSlang");
+const { addSlang, normalizeSlang } = require("./utils/normalizeSlang");
 const { askGroq, generateTripPlan, findNearbyEventsGroq } = require("./utils/groq");
 const { extractLocationKeywords }  = require("./utils/eventMatcher");
 const { startSession, hasSession, processStep, confirmSend, cancelSession } = require("./utils/flexBuilder");
@@ -21,21 +23,49 @@ const {
 
 const app    = express();
 const upload = multer({ dest: path.join(__dirname, "public") });
-app.use(express.json());
+app.use(express.json({ verify: verifyLineSignature }));
 app.use(express.static(path.join(__dirname, "public")));
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const LINE_TOKEN = process.env.LINE_TOKEN;
-const LIFF_ID    = process.env.LIFF_ID;
-const PORT       = process.env.PORT || 3000;
+const LINE_TOKEN          = process.env.LINE_TOKEN;
+const LINE_CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET;
+const ADMIN_SECRET        = process.env.ADMIN_SECRET;
+const LIFF_ID             = process.env.LIFF_ID;
+const PORT                = process.env.PORT || 3000;
+
+// ── Middleware: LINE signature verification ───────────────────────────────────
+function verifyLineSignature(req, res, buf) {
+  req.rawBody = buf;
+}
+
+function requireLineSignature(req, res, next) {
+  if (!LINE_CHANNEL_SECRET) return next();
+  const sig = req.headers["x-line-signature"];
+  if (!sig) return res.sendStatus(401);
+  const expected = crypto
+    .createHmac("sha256", LINE_CHANNEL_SECRET)
+    .update(req.rawBody)
+    .digest("base64");
+  if (sig !== expected) return res.sendStatus(401);
+  next();
+}
+
+// ── Middleware: admin routes auth ─────────────────────────────────────────────
+function requireAdmin(req, res, next) {
+  if (!ADMIN_SECRET) return next();
+  const token = req.headers["x-admin-secret"] || req.query.secret;
+  if (token !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+  next();
+}
 
 // ── Preprocess ────────────────────────────────────────────────────────────────
 function preprocessMessage(text) {
-  const thaiChars = text.match(/[\u0E00-\u0E7F]/g) || [];
-  const ratio = thaiChars.length / text.length;
+  const slangNormalized = normalizeSlang(text);
+  const thaiChars = slangNormalized.match(/[\u0E00-\u0E7F]/g) || [];
+  const ratio = thaiChars.length / slangNormalized.length;
   const { converted, wasConverted } = ratio > 0.4
-    ? { converted: text, wasConverted: false }
-    : autoConvertFont(text);
+    ? { converted: slangNormalized, wasConverted: false }
+    : autoConvertFont(slangNormalized);
   if (wasConverted) console.log(`[font] "${text}" -> "${converted}"`);
   return converted;
 }
@@ -163,21 +193,26 @@ app.get("/",      (req, res) => res.send("Bot is running 🚀"));
 app.get("/admin", (req, res) => res.sendFile(path.join(__dirname, "public", "admin.html")));
 app.get("/team",  (req, res) => res.sendFile(path.join(__dirname, "public", "team.html")));
 app.get("/liff", (req, res) => {
-  const html = require("fs").readFileSync(
+  const html = fs.readFileSync(
     path.join(__dirname, "public", "liff.html"), "utf8"
   ).replace("window.__LIFF_ID__ || \"\"", `"${LIFF_ID}"`);
   res.send(html);
 });
 
-app.post("/config/prompt", (req, res) => {
+app.post("/config/prompt", requireAdmin, (req, res) => {
   process.env.SYSTEM_PROMPT = req.body.prompt;
   res.json({ ok: true });
 });
 
 // อัปโหลดรูป Rich Menu
-app.post("/config/richmenu-image", upload.single("image"), async (req, res) => {
+app.post("/config/richmenu-image", requireAdmin, upload.single("image"), async (req, res) => {
   try {
-    const fs = require("fs");
+    if (!req.file) return res.status(400).json({ error: "ไม่มีไฟล์" });
+    const allowed = ["image/png", "image/jpeg"];
+    if (!allowed.includes(req.file.mimetype)) {
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: "อนุญาตเฉพาะ PNG หรือ JPEG เท่านั้น" });
+    }
     fs.renameSync(req.file.path, path.join(__dirname, "public", "richmenu.png"));
     await setupRichMenu();
     res.json({ ok: true });
@@ -187,7 +222,7 @@ app.post("/config/richmenu-image", upload.single("image"), async (req, res) => {
 });
 
 // อัปเดตปุ่ม Rich Menu
-app.post("/config/richmenu-buttons", async (req, res) => {
+app.post("/config/richmenu-buttons", requireAdmin, async (req, res) => {
   try {
     process.env.RICHMENU_BUTTONS = JSON.stringify(req.body.buttons);
     await setupRichMenu();
@@ -198,7 +233,7 @@ app.post("/config/richmenu-buttons", async (req, res) => {
 });
 
 // AI test
-app.get("/ai-test", async (req, res) => {
+app.get("/ai-test", requireAdmin, async (req, res) => {
   const msg = req.query.msg || "แนะนำที่เที่ยวใกล้กรุงเทพ";
   try { res.json({ msg, reply: await askAI(msg) }); }
   catch (err) { res.status(500).json({ error: err.message }); }
@@ -215,24 +250,24 @@ app.post("/trip-plan", async (req, res) => {
 });
 
 // ── KB API ────────────────────────────────────────────────────────────────────
-app.get("/kb",        (req, res) => res.json(getAllEntries()));
-app.post("/kb",       (req, res) => {
+app.get("/kb",        requireAdmin, (req, res) => res.json(getAllEntries()));
+app.post("/kb",       requireAdmin, (req, res) => {
   const { title, content, category, tags, duration } = req.body;
   if (!title || !content) return res.status(400).json({ error: "ต้องมี title และ content" });
   try { res.json({ ok: true, entry: addEntry({ title, content, category, tags, duration }) }); }
   catch (err) { res.status(400).json({ error: err.message }); }
 });
-app.put("/kb/:id",    (req, res) => {
+app.put("/kb/:id",    requireAdmin, (req, res) => {
   const u = updateEntry(req.params.id, req.body);
   if (!u) return res.status(404).json({ error: "ไม่พบ" });
   res.json({ ok: true, entry: u });
 });
-app.delete("/kb/:id", (req, res) => {
+app.delete("/kb/:id", requireAdmin, (req, res) => {
   if (!deleteEntry(req.params.id)) return res.status(404).json({ error: "ไม่พบ" });
   res.json({ ok: true });
 });
 
-app.post("/slang", (req, res) => {
+app.post("/slang", requireAdmin, (req, res) => {
   const { word, meaning } = req.body;
   if (!word || !meaning) return res.status(400).json({ error: "ต้องมี word และ meaning" });
   addSlang(word, meaning);
@@ -240,12 +275,8 @@ app.post("/slang", (req, res) => {
 });
 
 // ── LINE Webhook ──────────────────────────────────────────────────────────────
-app.post("/webhook", async (req, res) => {
-  res.sendStatus(200);
-  const events = req.body.events || [];
-
-  for (const event of events) {
-    if (event.type !== "message") continue;
+async function handleEvent(event) {
+    if (event.type !== "message") return;
 
     const userId = event.source.userId;
 
@@ -274,10 +305,10 @@ app.post("/webhook", async (req, res) => {
           ]
         }
       }]);
-      continue;
+      return;
     }
 
-    if (event.message.type !== "text") continue;
+    if (event.message.type !== "text") return;
     const userText = event.message.text.trim();
 
     // ── Flex Builder Session ──────────────────────────────────────────────────
@@ -285,12 +316,12 @@ app.post("/webhook", async (req, res) => {
       if (userText === "ยกเลิก" || userText === "cancel") {
         cancelSession(userId);
         await sendLine(event.replyToken, [withQuickReply(textMsg("ยกเลิกแล้วครับ 👋"))]);
-        continue;
+        return;
       }
       if (userText === "ส่ง" || userText === "send") {
         const flex = confirmSend(userId);
         if (flex) await sendLine(event.replyToken, [flex, withQuickReply(textMsg("ส่ง Flex Message แล้วครับ! ✅"))]);
-        continue;
+        return;
       }
       const result = processStep(userId, userText);
       if (result) {
@@ -298,32 +329,32 @@ app.post("/webhook", async (req, res) => {
         if (result.flex) msgs.unshift(result.flex);
         await sendLine(event.replyToken, msgs);
       }
-      continue;
+      return;
     }
 
     // ── /flex command ─────────────────────────────────────────────────────────
     if (userText === "/flex" || userText === "สร้าง flex") {
       const firstQ = startSession(userId);
       await sendLine(event.replyToken, [textMsg("🎨 สร้าง Flex Message!\nพิมพ์ 'ยกเลิก' เพื่อหยุดได้ตลอด\n\n" + firstQ)]);
-      continue;
+      return;
     }
 
     // ── Special Commands ──────────────────────────────────────────────────────
     if (["เมนู", "เลือกสาขา", "ข้อมูลหลักสูตร", "หลักสูตร", "สาขา", "เมนูหลักสูตร"].includes(userText)) {
       await sendLine(event.replyToken, [makeBranchCarousel()]);
-      continue;
+      return;
     }
 
     if (userText === "ค่าเทอม" || userText === "ค่าธรรมเนียม") {
       const reply = await askAI("ค่าเทอม ค่าธรรมเนียมการศึกษา FIET แต่ละสาขา");
       await sendLine(event.replyToken, [withQuickReply(textMsg(reply))]);
-      continue;
+      return;
     }
 
     if (userText === "ติดต่อคณะ") {
       const reply = await askAI("ข้อมูลติดต่อคณะครุศาสตร์อุตสาหกรรมและเทคโนโลยี FIET KMUTT");
       await sendLine(event.replyToken, [withQuickReply(textMsg(reply))]);
-      continue;
+      return;
     }
 
     // ── 6 สาขา ───────────────────────────────────────────────────────────────
@@ -333,8 +364,9 @@ app.post("/webhook", async (req, res) => {
       const branchName = BRANCHES[branchCode];
       const reply = await askAI(`ข้อมูลหลักสูตร ${branchCode} ${branchName}`);
       await sendLine(event.replyToken, [withQuickReply(textMsg(reply))]);
-      continue;
+      return;
     }
+
     // ข้อความจาก LIFF trip plan (ยาว / มี markdown) — ไม่ตอบ
     if (
       userText.startsWith("**เช้า") ||
@@ -342,38 +374,37 @@ app.post("/webhook", async (req, res) => {
       userText.startsWith("**เย็น") ||
       userText.startsWith("**ค่ำ") ||
       userText.startsWith("## วัน") ||
-      userText.startsWith("# แผนเที่ยว") ||
-      userText.length > 800
+      userText.startsWith("# แผนเที่ยว")
     ) {
-      continue;
+      return;
     }
 
     if (userText.length > 500) {
       await sendLine(event.replyToken, [withQuickReply(textMsg("กรุณาส่งข้อความสั้นกว่านี้นะ 😅"))]);
-      continue;
+      return;
     }
 
     if (userText === "ระบุพื้นที่") {
       await sendLine(event.replyToken, [textMsg(
         "📍 พิมพ์ชื่อย่าน อำเภอ หรือสถานที่ที่อยู่ตอนนี้ได้เลยครับ\n\nเช่น:\n- สยาม\n- อ่อนนุช\n- นิมมานเฮมิน เชียงใหม่\n- ถนนข้าวสาร"
       )]);
-      continue;
+      return;
     }
 
     if (userText === "ส่ง location ใหม่") {
       await sendLine(event.replyToken, [textMsg("📍 กดปุ่ม + ด้านล่าง แล้วเลือก 'ตำแหน่ง' เพื่อส่ง location ใหม่ได้เลยครับ 😊")]);
-      continue;
+      return;
     }
 
     if (userText === "ติดต่อทีม") {
       await sendLine(event.replyToken, [withQuickReply(textMsg("📞 ติดต่อทีมงาน!\n\n💬 LINE: @travelteam\n📧 Email: team@travel.com\n⏰ จ-ศ 9:00-18:00 น."))]);
-      continue;
+      return;
     }
 
     if (userText === "มีโปรโมชันอะไรบ้าง") {
       const promos = searchKnowledge("โปรโมชัน ส่วนลด พิเศษ");
       await sendLine(event.replyToken, [withQuickReply(makePromoCarousel(promos))]);
-      continue;
+      return;
     }
 
     if (userText.includes("สถานที่ลับ") || userText.includes("ไม่ค่อยมีคนรู้จัก")) {
@@ -389,13 +420,13 @@ app.post("/webhook", async (req, res) => {
         const reply = await askAI("แนะนำสถานที่ท่องเที่ยวที่ไม่ค่อยมีคนรู้จักในไทย 5 แห่ง");
         await sendLine(event.replyToken, [withQuickReply(textMsg(reply))]);
       }
-      continue;
+      return;
     }
 
     if (userText === "ลงทะเบียนอีเวนท์") {
       const evts = searchKnowledge("อีเวนท์ งาน เทศกาล event");
       await sendLine(event.replyToken, [withQuickReply(makeEventCarousel(evts))]);
-      continue;
+      return;
     }
 
     // ── Groq ตอบหลัก ─────────────────────────────────────────────────────────
@@ -447,7 +478,14 @@ app.post("/webhook", async (req, res) => {
     }
 
     await sendLine(event.replyToken, messages);
-  }
+}
+
+app.post("/webhook", requireLineSignature, async (req, res) => {
+  res.sendStatus(200);
+  const events = req.body.events || [];
+  await Promise.all(events.map(event => handleEvent(event).catch(err =>
+    console.error("[webhook-event]", err.message)
+  )));
 });
 
 // ── Startup ───────────────────────────────────────────────────────────────────

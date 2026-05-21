@@ -17,65 +17,28 @@ const headers = {
 // 2500 x 1686
 // ─────────────────────────────────────────────────────────────
 
+// Layout #4: left big (2/3) + two stacked right (1/3 each)
+// 2500 wide → left=1667, right=833  |  1686 tall → each right=843
 const richMenuBody = {
-  size: {
-    width: 2500,
-    height: 1686
-  },
-
+  size: { width: 2500, height: 1686 },
   selected: true,
-
   name: "FIET Main Menu",
-
   chatBarText: "เมนู FIET 🎓",
-
   areas: [
-    // LEFT BIG
+    // LEFT BIG — หลักสูตร
     {
-      bounds: {
-        x: 0,
-        y: 0,
-        width: 1250,
-        height: 1686
-      },
-
-      action: {
-        type: "postback",
-        label: "หลักสูตร",
-        data: "action=course"
-      }
+      bounds: { x: 0, y: 0, width: 1667, height: 1686 },
+      action: { type: "message", label: "หลักสูตร", text: "หลักสูตร" }
     },
-
-    // RIGHT TOP
+    // RIGHT TOP — ติดต่อคณะ
     {
-      bounds: {
-        x: 1250,
-        y: 0,
-        width: 1250,
-        height: 843
-      },
-
-      action: {
-        type: "postback",
-        label: "ค่าเทอม",
-        data: "action=tuition"
-      }
+      bounds: { x: 1667, y: 0, width: 833, height: 843 },
+      action: { type: "message", label: "ติดต่อคณะ", text: "ติดต่อคณะ" }
     },
-
-    // RIGHT BOTTOM
+    // RIGHT BOTTOM — ค่าเทอม
     {
-      bounds: {
-        x: 1250,
-        y: 843,
-        width: 1250,
-        height: 843
-      },
-
-      action: {
-        type: "postback",
-        label: "ติดต่อคณะ",
-        data: "action=contact"
-      }
+      bounds: { x: 1667, y: 843, width: 833, height: 843 },
+      action: { type: "message", label: "ค่าเทอม", text: "ค่าเทอม" }
     }
   ]
 };
@@ -206,91 +169,59 @@ async function generatePlaceholderMenu(richMenuId) {
 
     const { createCanvas } = require("canvas");
 
-    const canvas = createCanvas(2500, 1686);
+    const W = 2500, H = 1686;
+    const SPLIT_X = 1667, SPLIT_Y = 843;
 
+    const canvas = createCanvas(W, H);
     const ctx = canvas.getContext("2d");
 
-    // Background
-    ctx.fillStyle = "#111827";
-    ctx.fillRect(0, 0, 2500, 1686);
-
-    const buttons = [
-
-      {
-        x: 0,
-        y: 0,
-        w: 1250,
-        h: 1686,
-        emoji: "🎓",
-        label: "หลักสูตร",
-        color: "#2563eb"
-      },
-
-      {
-        x: 1250,
-        y: 0,
-        w: 1250,
-        h: 843,
-        emoji: "💰",
-        label: "ค่าเทอม",
-        color: "#f59e0b"
-      },
-
-      {
-        x: 1250,
-        y: 843,
-        w: 1250,
-        h: 843,
-        emoji: "☎️",
-        label: "ติดต่อคณะ",
-        color: "#10b981"
-      }
+    // ── Panel definitions (match acrylic sign colors) ──────────────────
+    const panels = [
+      // LEFT BIG — หลักสูตร: dark navy like the sign
+      { x: 0,       y: 0,       w: SPLIT_X,       h: H,
+        bg: "#1a2a5e", labelTh: "หลักสูตร", labelEn: "PROGRAM",
+        iconSize: 320, textSize: 130, subSize: 80 },
+      // RIGHT TOP — ค่าเทอม: light blue like the sign
+      { x: SPLIT_X, y: 0,       w: W - SPLIT_X,   h: SPLIT_Y,
+        bg: "#7bb8d4", labelTh: "ค่าเทอม", labelEn: "TUITION FEE",
+        iconSize: 180, textSize: 90, subSize: 60 },
+      // RIGHT BOTTOM — ติดต่อคณะ: very light blue/white like the sign
+      { x: SPLIT_X, y: SPLIT_Y, w: W - SPLIT_X,   h: H - SPLIT_Y,
+        bg: "#d6eaf5", labelTh: "ติดต่อคณะ", labelEn: "CONTACT FACULTY",
+        textColor: "#555", iconSize: 180, textSize: 90, subSize: 60 },
     ];
 
-    for (const btn of buttons) {
+    for (const p of panels) {
+      const tc = p.textColor || "#ffffff";
+      const cx = p.x + p.w / 2;
+      const cy = p.y + p.h / 2;
 
-      // Background
-      ctx.fillStyle = btn.color;
-      ctx.fillRect(
-        btn.x + 8,
-        btn.y + 8,
-        btn.w - 16,
-        btn.h - 16
-      );
+      // Panel background
+      ctx.fillStyle = p.bg;
+      ctx.fillRect(p.x, p.y, p.w, p.h);
 
-      // Emoji
-      ctx.font = "220px Arial";
-      ctx.fillStyle = "#ffffff";
+      // Subtle inner border to mimic acrylic edge
+      ctx.strokeStyle = tc === "#ffffff" ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.12)";
+      ctx.lineWidth = 8;
+      ctx.strokeRect(p.x + 16, p.y + 16, p.w - 32, p.h - 32);
+
+      // Thai label
+      ctx.fillStyle = tc;
       ctx.textAlign = "center";
+      ctx.font = `bold ${p.textSize}px Arial`;
+      ctx.fillText(p.labelTh, cx, cy + p.iconSize * 0.55);
 
-      ctx.fillText(
-        btn.emoji,
-        btn.x + btn.w / 2,
-        btn.y + btn.h / 2 - 80
-      );
-
-      // Label
-      ctx.font = "bold 110px Arial";
-
-      ctx.fillText(
-        btn.label,
-        btn.x + btn.w / 2,
-        btn.y + btn.h / 2 + 120
-      );
+      // English sub-label
+      ctx.font = `${p.subSize}px Arial`;
+      ctx.fillText(p.labelEn, cx, cy + p.iconSize * 0.55 + p.subSize + 10);
     }
 
-    // Grid lines
-    ctx.strokeStyle = "#ffffff44";
+    // Divider lines
+    ctx.strokeStyle = "rgba(255,255,255,0.5)";
     ctx.lineWidth = 6;
-
     ctx.beginPath();
-
-    ctx.moveTo(1250, 0);
-    ctx.lineTo(1250, 1686);
-
-    ctx.moveTo(1250, 843);
-    ctx.lineTo(2500, 843);
-
+    ctx.moveTo(SPLIT_X, 0);     ctx.lineTo(SPLIT_X, H);
+    ctx.moveTo(SPLIT_X, SPLIT_Y); ctx.lineTo(W, SPLIT_Y);
     ctx.stroke();
 
     const buffer = canvas.toBuffer("image/png");
@@ -322,9 +253,6 @@ async function generatePlaceholderMenu(richMenuId) {
   }
 }
 
-module.exports = {
-  setupRichMenu
-};
 // ── Flex Message: Place Carousel ──────────────────────────────────────────────
 function makePlaceCarousel(places) {
   const bubbles = places.map(p => ({

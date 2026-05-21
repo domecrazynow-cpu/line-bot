@@ -6,13 +6,13 @@ const fs = require('fs');
 
 const SLANG_PATH = path.join(__dirname, '../db/slang.json');
 
-/**
- * โหลด slang dictionary (reload ทุกครั้ง เพื่อให้แก้ไขไฟล์แล้วมีผลทันที)
- */
+let _cache = null;
+
 function loadSlang() {
+  if (_cache) return _cache;
   try {
-    const raw = fs.readFileSync(SLANG_PATH, 'utf8');
-    return JSON.parse(raw);
+    _cache = JSON.parse(fs.readFileSync(SLANG_PATH, 'utf8'));
+    return _cache;
   } catch (err) {
     console.warn('[slang] โหลด slang.json ไม่ได้:', err.message);
     return {};
@@ -42,6 +42,7 @@ function normalizeSlang(text) {
 function addSlang(word, meaning) {
   const slang = loadSlang();
   slang[word] = meaning;
+  _cache = slang;
   fs.writeFileSync(SLANG_PATH, JSON.stringify(slang, null, 2), 'utf8');
   console.log(`[slang] เพิ่มคำใหม่: "${word}" → "${meaning}"`);
 }
