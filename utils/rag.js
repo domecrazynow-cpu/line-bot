@@ -1,14 +1,15 @@
 // utils/rag.js
 const axios = require("axios");
 
-const QDRANT_URL = process.env.QDRANT_URL || "http://qdrant:6333";
-const OLLAMA_URL = process.env.OLLAMA_URL || "http://ollama:11434";
-const EMBED_MODEL = "nomic-embed-text";
-const COLLECTION  = "knowledge";
-const TOP_K       = 5;
+const QDRANT_URL     = process.env.QDRANT_URL     || "http://localhost:6333";
+const OLLAMA_URL     = process.env.OLLAMA_URL     || "http://localhost:11434";
+const EMBED_PROVIDER = process.env.EMBED_PROVIDER || "ollama";
+const JINA_API_KEY   = process.env.JINA_API_KEY;
+const EMBED_MODEL    = "nomic-embed-text";
+const COLLECTION     = "knowledge";
+const TOP_K          = 5;
 
 // ── Embedding cache (in-memory) ────────────────────────────────────────────────
-// ป้องกันการ embed คำถามเดิมซ้ำๆ ทำให้เร็วขึ้นมาก
 const embedCache = new Map();
 const CACHE_MAX  = 200;
 
@@ -19,21 +20,32 @@ async function getEmbedding(text) {
     return embedCache.get(key);
   }
 
-  const res = await axios.post(
-    `${OLLAMA_URL}/api/embeddings`,
-    { model: EMBED_MODEL, prompt: text },
-    { timeout: 15000 } // timeout 15s — ถ้า Ollama ช้าเกินนี้ถือว่าล้มเหลว
-  );
+  let embedding;
 
-  const embedding = res.data.embedding;
+  if (EMBED_PROVIDER === "jina" && JINA_API_KEY) {
+    const res = await axios.post(
+      "https://api.jina.ai/v1/embeddings",
+      { model: "jina-embeddings-v3", input: [text], task: "retrieval.query" },
+      {
+        headers: { Authorization: `Bearer ${JINA_API_KEY}`, "Content-Type": "application/json" },
+        timeout: 10000,
+      }
+    );
+    embedding = res.data.data[0].embedding;
+  } else {
+    const res = await axios.post(
+      `${OLLAMA_URL}/api/embeddings`,
+      { model: EMBED_MODEL, prompt: text },
+      { timeout: 15000 }
+    );
+    embedding = res.data.embedding;
+  }
 
-  // จำกัดขนาด cache
   if (embedCache.size >= CACHE_MAX) {
     const firstKey = embedCache.keys().next().value;
     embedCache.delete(firstKey);
   }
   embedCache.set(key, embedding);
-
   return embedding;
 }
 

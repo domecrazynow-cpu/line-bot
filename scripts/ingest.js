@@ -7,14 +7,16 @@ const crypto  = require("crypto");
 const axios   = require("axios");
 const mammoth = require("mammoth");
 
-const QDRANT_URL      = process.env.QDRANT_URL || "http://localhost:6333";
-const OLLAMA_URL      = process.env.OLLAMA_URL || "http://localhost:11434";
+const QDRANT_URL      = process.env.QDRANT_URL     || "http://localhost:6333";
+const OLLAMA_URL      = process.env.OLLAMA_URL     || "http://localhost:11434";
+const EMBED_PROVIDER  = process.env.EMBED_PROVIDER || "ollama";
+const JINA_API_KEY    = process.env.JINA_API_KEY;
 const EMBED_MODEL     = "nomic-embed-text";
 const COLLECTION      = "knowledge";
 const PDF_DIR         = process.env.PDF_DIR || path.join(__dirname, "../pdfs");
 const CHUNK_SIZE      = 500;
 const CHUNK_OVERLAP   = 100;
-const VECTOR_SIZE     = 768;
+const VECTOR_SIZE     = (EMBED_PROVIDER === "jina" && JINA_API_KEY) ? 1024 : 768;
 const UPSERT_BATCH_SIZE = 10;
 
 // ── Standard font data path (แก้ปัญหา font warning) ──────────────────────────
@@ -89,6 +91,17 @@ function chunkText(text, source) {
 
 // ── Embedding ─────────────────────────────────────────────────────────────────
 async function getEmbedding(text) {
+  if (EMBED_PROVIDER === "jina" && JINA_API_KEY) {
+    const res = await axios.post(
+      "https://api.jina.ai/v1/embeddings",
+      { model: "jina-embeddings-v3", input: [text], task: "retrieval.passage" },
+      {
+        headers: { Authorization: `Bearer ${JINA_API_KEY}`, "Content-Type": "application/json" },
+        timeout: 15000,
+      }
+    );
+    return res.data.data[0].embedding;
+  }
   const res = await axios.post(`${OLLAMA_URL}/api/embeddings`, {
     model: EMBED_MODEL,
     prompt: text,
@@ -97,12 +110,20 @@ async function getEmbedding(text) {
 }
 
 // ── สร้าง Collection ──────────────────────────────────────────────────────────
-async function createCollection() {
+async function createCollection(recreate = false) {
+  if (recreate) {
+    try {
+      await axios.delete(`${QDRANT_URL}/collections/${COLLECTION}`);
+      console.log(`[qdrant] Collection deleted (recreate mode)`);
+    } catch {
+      // ignore if not exists
+    }
+  }
   try {
     await axios.put(`${QDRANT_URL}/collections/${COLLECTION}`, {
       vectors: { size: VECTOR_SIZE, distance: "Cosine" },
     });
-    console.log(`[qdrant] Collection created`);
+    console.log(`[qdrant] Collection created (${VECTOR_SIZE} dims)`);
   } catch (err) {
     if (err.response?.status === 409) {
       console.log(`[qdrant] Collection already exists`);
@@ -176,10 +197,15 @@ async function upsertChunks(chunks) {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 async function main() {
+  const recreate = process.argv.includes("--recreate");
+  const provider = (EMBED_PROVIDER === "jina" && JINA_API_KEY) ? "jina-embeddings-v3" : `ollama/${EMBED_MODEL}`;
+
   console.log("🚀 RAG Ingest System");
-  console.log(`   Dir:    ${PDF_DIR}`);
-  console.log(`   Qdrant: ${QDRANT_URL}`);
-  console.log(`   Ollama: ${OLLAMA_URL}\n`);
+  console.log(`   Dir:      ${PDF_DIR}`);
+  console.log(`   Qdrant:   ${QDRANT_URL}`);
+  console.log(`   Embed:    ${provider} (${VECTOR_SIZE} dims)`);
+  if (recreate) console.log(`   Mode:     RECREATE — existing collection will be deleted`);
+  console.log("");
 
   if (!fs.existsSync(PDF_DIR)) {
     fs.mkdirSync(PDF_DIR, { recursive: true });
@@ -198,7 +224,7 @@ async function main() {
   }
 
   console.log(`[info] พบ ${files.length} ไฟล์\n`);
-  await createCollection();
+  await createCollection(recreate);
 
   let totalChunks = 0;
   let skipped     = 0;
