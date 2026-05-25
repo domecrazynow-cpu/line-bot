@@ -1,5 +1,5 @@
-@echo off
-set NGROK=C:\Users\User\AppData\Local\Microsoft\WinGet\Packages\Ngrok.Ngrok_Microsoft.Winget.Source_8wekyb3d8bbwe\ngrok.exe
+﻿@echo off
+set NGROK=C:\Users\USER\AppData\Local\Microsoft\WinGet\Packages\Ngrok.Ngrok_Microsoft.Winget.Source_8wekyb3d8bbwe\ngrok.exe
 set DOMAIN=granola-parchment-unsoiled.ngrok-free.dev
 
 :loop

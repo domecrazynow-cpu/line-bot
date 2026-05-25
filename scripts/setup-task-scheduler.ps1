@@ -1,9 +1,9 @@
-# setup-task-scheduler.ps1
+﻿# setup-task-scheduler.ps1
 # Run once (as Administrator) to register auto-start at Windows login.
 # After running, start-bot.bat will execute automatically every time you log in.
 
 $TaskName = "FIET-Bot-Autostart"
-$BotDir   = "C:\Users\User\Documents\GitHub\line-bot"
+$BotDir   = "C:\Users\USER\line-bot"
 $BatFile  = "$BotDir\start-bot.bat"
 
 Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
