@@ -1,0 +1,23 @@
+{
+  "Ucf7fd895a78b0434730fc5dc47f1c201": {
+    "programs": {
+      "ETE": 2,
+      "PPT": 2,
+      "MTE": 1,
+      "ECT": 3,
+      "IED": 3,
+      "CTE": 1,
+      "CIT": 1
+    },
+    "topics": {
+      "curriculum": 13,
+      "admission": 1,
+      "career": 1,
+      "courses": 1,
+      "fees": 1
+    },
+    "lastProgram": "CIT",
+    "msgCount": 20,
+    "lastActive": "2026-05-31T18:14:29.980Z"
+  }
+}

@@ -7,7 +7,9 @@ const EMBED_PROVIDER = process.env.EMBED_PROVIDER || "ollama";
 const JINA_API_KEY   = process.env.JINA_API_KEY;
 const EMBED_MODEL    = "nomic-embed-text";
 const COLLECTION     = "knowledge";
-const TOP_K          = 5;
+const TOP_K           = 8;    // ลดจาก 10 — บอทได้ context น้อยลง ตอบกระชับขึ้น
+const SCORE_THRESHOLD = 0.3;
+const MAX_CONTEXT     = 4000; // ลดจาก 8000 — บีบให้บอทไม่ dump ทุกอย่าง
 
 // ── Embedding cache (in-memory) ────────────────────────────────────────────────
 const embedCache = new Map();
@@ -50,32 +52,60 @@ async function getEmbedding(text) {
 }
 
 // ── ค้นหาจาก Qdrant ───────────────────────────────────────────────────────────
-async function searchRAG(query) {
+/**
+ * @param {string} query       - คำถามหรือ query text
+ * @param {string|null} program - รหัสสาขา เช่น "ETE", "MTE" (optional)
+ */
+async function searchRAG(query, program = null) {
   try {
     const vector = await getEmbedding(query);
 
+    // สร้าง filter ถ้าระบุสาขา
+    const searchBody = {
+      vector,
+      limit: TOP_K,
+      with_payload: true,
+    };
+
+    if (program) {
+      searchBody.filter = {
+        must: [{ key: "program", match: { value: program } }],
+      };
+    }
+
     const res = await axios.post(
       `${QDRANT_URL}/collections/${COLLECTION}/points/search`,
-      { vector, limit: TOP_K, with_payload: true },
-      { timeout: 5000 }
+      searchBody,
+      { timeout: 8000 }
     );
 
-    const results = res.data.result || [];
+    let results = res.data.result || [];
+
+    // ถ้ากรองตามสาขาแล้วได้น้อยกว่า 3 → ค้นใหม่แบบไม่กรอง
+    if (program && results.length < 3) {
+      console.log(`[rag] program filter returned ${results.length} — falling back to unfiltered`);
+      const res2 = await axios.post(
+        `${QDRANT_URL}/collections/${COLLECTION}/points/search`,
+        { vector, limit: TOP_K, with_payload: true },
+        { timeout: 8000 }
+      );
+      results = res2.data.result || [];
+    }
+
     if (!results.length) return null;
 
-    // กรองเฉพาะ results ที่มี score สูงพอ (relevance threshold)
-    const relevant = results.filter(r => r.score > 0.5);
+    const relevant = results.filter(r => r.score > SCORE_THRESHOLD);
     if (!relevant.length) {
-      console.log("[rag] no relevant results (score < 0.5)");
+      console.log(`[rag] no relevant results (score < ${SCORE_THRESHOLD})`);
       return null;
     }
 
     const context = relevant
       .map(r => `[จาก: ${r.payload.source}]\n${r.payload.text}`)
       .join("\n\n---\n\n")
-      .slice(0, 4500);
+      .slice(0, MAX_CONTEXT);
 
-    console.log(`[rag] found ${relevant.length} chunks, score: ${relevant[0].score.toFixed(3)}`);
+    console.log(`[rag] found ${relevant.length} chunks, top score: ${relevant[0].score.toFixed(3)}, program filter: ${program || "none"}`);
     return context;
 
   } catch (err) {
@@ -89,10 +119,9 @@ async function searchRAG(query) {
 }
 
 // ── เช็คสถานะ Qdrant ──────────────────────────────────────────────────────────
-// Cache ผล isRAGReady ไว้ 60 วินาที ไม่ต้องเช็คทุก request
 let ragReadyCache     = null;
 let ragReadyCacheTime = 0;
-const RAG_CACHE_TTL   = 60_000; // 60 seconds
+const RAG_CACHE_TTL   = 60_000;
 
 async function isRAGReady() {
   const now = Date.now();

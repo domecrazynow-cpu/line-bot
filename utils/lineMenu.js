@@ -556,12 +556,16 @@ function withQuickReply(message) {
     ...message,
     quickReply: {
       items: [
-        { type: "action", action: { type: "message", label: "⚙️ MTE", text: "ข้อมูลหลักสูตร MTE" } },
-        { type: "action", action: { type: "message", label: "⚡ ETE", text: "ข้อมูลหลักสูตร ETE" } },
-        { type: "action", action: { type: "message", label: "🏗️ CTE", text: "ข้อมูลหลักสูตร CTE" } },
-        { type: "action", action: { type: "message", label: "🏭 IEd", text: "ข้อมูลหลักสูตร IEd" } },
-        { type: "action", action: { type: "message", label: "🖨️ PPT", text: "ข้อมูลหลักสูตร PPT" } },
-        { type: "action", action: { type: "message", label: "💻 ECT", text: "ข้อมูลหลักสูตร ECT" } },
+        { type: "action", action: { type: "message", label: "เทียบทุกสาขา", text: "เทียบทุกสาขา" } },
+        { type: "action", action: { type: "message", label: "ไปต่อสายไหนดี", text: "ไปต่อสายไหนดี" } },
+        { type: "action", action: { type: "message", label: "MTE เครื่องกล",  text: "ข้อมูลหลักสูตร MTE" } },
+        { type: "action", action: { type: "message", label: "ETE ไฟฟ้า",      text: "ข้อมูลหลักสูตร ETE" } },
+        { type: "action", action: { type: "message", label: "CTE โยธา",       text: "ข้อมูลหลักสูตร CTE" } },
+        { type: "action", action: { type: "message", label: "IED อุตสาหการ", text: "ข้อมูลหลักสูตร IED" } },
+        { type: "action", action: { type: "message", label: "PPT การพิมพ์",   text: "ข้อมูลหลักสูตร PPT" } },
+        { type: "action", action: { type: "message", label: "ECT สื่อสาร",    text: "ข้อมูลหลักสูตร ECT" } },
+        { type: "action", action: { type: "message", label: "CIT คอมพิวเตอร์", text: "ข้อมูลหลักสูตร CIT" } },
+        { type: "action", action: { type: "message", label: "ITE อุตสาหกรรม", text: "ข้อมูลหลักสูตร ITE" } },
       ]
     }
   };

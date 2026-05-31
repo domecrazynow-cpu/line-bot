@@ -77,6 +77,8 @@ const majorMap = {
   IED: "ครุศาสตร์อุตสาหการ Industrial Technology Education",
   PPT: "เทคโนโลยีการพิมพ์และบรรจุภัณฑ์ Printing and Packaging Technology",
   ECT: "เทคโนโลยีและสื่อสารการศึกษา Educational Communications and Technology",
+  CIT: "คอมพิวเตอร์และเทคโนโลยีสารสนเทศ Computer and Information Technology",
+  ITE: "เทคโนโลยีอุตสาหกรรม Industrial Technology",
 };
 const BRANCHES = {
   MTE: "ครุศาสตร์เครื่องกล (Mechanical Technology Education)",
@@ -85,14 +87,18 @@ const BRANCHES = {
   IED: "ครุศาสตร์อุตสาหการ (Industrial Technology Education)",
   PPT: "เทคโนโลยีการพิมพ์และบรรจุภัณฑ์ (Printing and Packaging Technology)",
   ECT: "เทคโนโลยีและสื่อสารการศึกษา (Educational Communications and Technology)",
+  CIT: "คอมพิวเตอร์และเทคโนโลยีสารสนเทศ (Computer and Information Technology)",
+  ITE: "เทคโนโลยีอุตสาหกรรม (Industrial Technology)",
 };
 const majorAliases = [
   { code: "MTE", terms: ["MTE", "ครูเครื่องกล", "เครื่องกล", "ครุศาสตร์เครื่องกล", "mechanical"] },
   { code: "ETE", terms: ["ETE", "ครูไฟฟ้า", "ไฟฟ้า", "ครุศาสตร์ไฟฟ้า", "electrical"] },
   { code: "CTE", terms: ["CTE", "ครูโยธา", "โยธา", "ครุศาสตร์โยธา", "civil"] },
-  { code: "IED", terms: ["IED", "IEd", "ครูอุต", "อุตสาหการ", "ครุศาสตร์อุตสาหการ", "industrial"] },
+  { code: "IED", terms: ["IED", "IEd", "ครูอุต", "อุตสาหการ", "ครุศาสตร์อุตสาหการ", "industrial education"] },
   { code: "PPT", terms: ["PPT", "การพิมพ์", "บรรจุภัณฑ์", "พิมพ์", "printing", "packaging"] },
-  { code: "ECT", terms: ["ECT", "สื่อสารการศึกษา", "เทคโนโลยีและสื่อสาร", "สื่อ", "educational communications"] },
+  { code: "ECT", terms: ["ECT", "สื่อสารการศึกษา", "เทคโนโลยีและสื่อสาร", "educational communications", "เทคโนโลยีดิจิทัล"] },
+  { code: "CIT", terms: ["CIT", "คอมพิวเตอร์", "computer", "เทคโนโลยีสารสนเทศ", "information technology", "มัลติมีเดีย", "multimedia"] },
+  { code: "ITE", terms: ["ITE", "เทคโนโลยีอุตสาหกรรม", "industrial technology", "ทล.บ"] },
 ];
 
 function detectMajorKey(text) {
@@ -112,7 +118,13 @@ function detectMajorKey(text) {
 }
 
 // ── Ask AI (Groq + KB context) ───────────────────────────────────────────────
-const { searchRAG, isRAGReady } = require("./utils/rag");
+const { searchRAG, isRAGReady }                       = require("./utils/rag");
+const { updateProfile, buildProfileContext, getTopProgram } = require("./utils/userProfile");
+const { getFallback, getComparisonOverview }           = require("./utils/fallback");
+const {
+  isExpired, addMessage, getGroqHistory,
+  detectConfusion, buildSummary, endSession, getTurnCount,
+} = require("./utils/chatSession");
 
 function buildRagQuery(cleanMsg) {
   const majorKey = detectMajorKey(cleanMsg);
@@ -150,27 +162,69 @@ function buildRagQuery(cleanMsg) {
     ...topicHints,
   ].join(" ");
 }
-async function askAI(userMsg) {
+/**
+ * @param {string}      userMsg
+ * @param {string|null} userId      - LINE userId
+ * @param {boolean}     isConfused  - ให้บอทสรุปสิ่งที่คุยมา
+ */
+async function askAI(userMsg, userId = null, isConfused = false) {
   const cleanMsg = preprocessMessage(userMsg);
   const queryMsg = buildRagQuery(cleanMsg);
+  const majorKey = detectMajorKey(cleanMsg);
 
-  const hits = searchKnowledge(queryMsg);
+  // ── อัปเดตโปรไฟล์ user ───────────────────────────────────────────────────
+  if (userId) updateProfile(userId, majorKey, cleanMsg);
+  const profileContext = userId ? buildProfileContext(userId) : null;
+
+  // ── Conversation history ──────────────────────────────────────────────────
+  const history = userId ? getGroqHistory(userId) : [];
+
+  // ── ถ้า user ดูสับสน → เติม instruction ก่อนคำถาม ────────────────────────
+  let finalMsg = cleanMsg;
+  if (isConfused && userId) {
+    const pastQ = history
+      .filter(m => m.role === "user").slice(-4)
+      .map(m => `"${m.content}"`).join(", ");
+    finalMsg = `[ผู้ใช้ดูสับสน] คำถามที่ผ่านมา: ${pastQ}\nข้อความล่าสุด: ${cleanMsg}\n→ กรุณาทวนสรุปสิ่งที่คุยมา แล้วถามให้ชัดว่าต้องการอะไร`;
+  }
+
+  // ── Knowledge Base ────────────────────────────────────────────────────────
+  const hits    = searchKnowledge(queryMsg);
   const context = buildContext(hits);
 
+  // ── RAG ───────────────────────────────────────────────────────────────────
   let ragContext = null;
   const ragReady = await isRAGReady();
 
   if (ragReady) {
-    ragContext = await searchRAG(queryMsg);
-    console.log("[rag] query:", queryMsg);
-    console.log("[rag] ready:", ragReady, "found:", !!ragContext, "length:", ragContext?.length || 0);
+    ragContext = await searchRAG(queryMsg, majorKey || null);
+    console.log("[rag] query:", queryMsg.slice(0, 80));
+    console.log("[rag] program:", majorKey || "none", "| found:", !!ragContext, "| len:", ragContext?.length || 0);
   } else {
     console.log("[rag] not ready");
   }
 
+  // ── Fallback เมื่อ RAG ไม่พบข้อมูล ───────────────────────────────────────
+  if (!ragContext && majorKey) {
+    const fb = getFallback(majorKey);
+    if (fb) {
+      console.log(`[fallback] static fallback for ${majorKey}`);
+      ragContext = fb;
+    }
+  }
+
   const fullContext = [context, ragContext].filter(Boolean).join("\n\n---\n\n");
 
-  return askGroq(cleanMsg, fullContext || null);
+  // ── เรียก Groq (พร้อม history) ────────────────────────────────────────────
+  const reply = await askGroq(finalMsg, fullContext || null, profileContext, history);
+
+  // ── บันทึก turn ลง session ────────────────────────────────────────────────
+  if (userId) {
+    addMessage(userId, "user",      cleanMsg);
+    addMessage(userId, "assistant", reply);
+  }
+
+  return reply;
 }
 
 // ── LINE helpers ──────────────────────────────────────────────────────────────
@@ -280,6 +334,16 @@ async function handleEvent(event) {
 
     const userId = event.source.userId;
 
+    // ── Session timeout: ถ้าไม่ active นาน 15 นาที → จบ session เก่า ─────────
+    if (userId && isExpired(userId)) {
+      const summary = endSession(userId);
+      if (summary && summary.questions.length > 0) {
+        // บันทึกสรุป session ลง profile (เพื่อใช้อ้างอิงในอนาคต)
+        updateProfile(userId, null, `[session summary: ${summary.questions.slice(0, 3).join(" | ")}]`);
+        console.log(`[session] timeout → saved summary (${summary.durationMin} min, ${summary.questions.length} q)`);
+      }
+    }
+
     // ── Location Message ──────────────────────────────────────────────────────
     if (event.message.type === "location") {
       const { latitude, longitude, address, title } = event.message;
@@ -346,23 +410,23 @@ async function handleEvent(event) {
     }
 
     if (userText === "ค่าเทอม" || userText === "ค่าธรรมเนียม") {
-      const reply = await askAI("ค่าเทอม ค่าธรรมเนียมการศึกษา FIET แต่ละสาขา");
+      const reply = await askAI("ค่าเทอม ค่าธรรมเนียมการศึกษา FIET แต่ละสาขา", userId);
       await sendLine(event.replyToken, [withQuickReply(textMsg(reply))]);
       return;
     }
 
     if (userText === "ติดต่อคณะ") {
-      const reply = await askAI("ข้อมูลติดต่อคณะครุศาสตร์อุตสาหกรรมและเทคโนโลยี FIET KMUTT");
+      const reply = await askAI("ข้อมูลติดต่อคณะครุศาสตร์อุตสาหกรรมและเทคโนโลยี FIET KMUTT", userId);
       await sendLine(event.replyToken, [withQuickReply(textMsg(reply))]);
       return;
     }
 
-    // ── 6 สาขา ───────────────────────────────────────────────────────────────
-    const branchMatch = userText.match(/(?:ข้อมูลหลักสูตร\s*)?(MTE|ETE|CTE|IEd|IED|PPT|ECT)\b/i);
+    // ── 8 สาขา ───────────────────────────────────────────────────────────────
+    const branchMatch = userText.match(/(?:ข้อมูลหลักสูตร\s*)?(MTE|ETE|CTE|IEd|IED|PPT|ECT|CIT|ITE)\b/i);
     if (branchMatch) {
       const branchCode = branchMatch[1].toUpperCase();
       const branchName = BRANCHES[branchCode];
-      const reply = await askAI(`ข้อมูลหลักสูตร ${branchCode} ${branchName}`);
+      const reply = await askAI(`ข้อมูลหลักสูตร ${branchCode} ${branchName}`, userId);
       await sendLine(event.replyToken, [withQuickReply(textMsg(reply))]);
       return;
     }
@@ -429,10 +493,106 @@ async function handleEvent(event) {
       return;
     }
 
+    // ── เปรียบเทียบสาขา ────────────────────────────────────────────────────────
+    const isCompareAll = (
+      userText === "เทียบทุกสาขา" ||
+      userText === "เทียบกับทุกสาขา" ||
+      userText === "เปรียบเทียบทุกสาขา" ||
+      (userText.includes("เทียบ") && (userText.includes("ทุกสาขา") || userText.includes("ทุกหลักสูตร"))) ||
+      (userText.includes("เปรียบเทียบ") && userText.includes("สาขา"))
+    );
+    if (isCompareAll) {
+      // ถ้าถามเฉพาะด้าน เช่น "เทียบอาชีพ" / "เทียบค่าเทอม"
+      const wantCareer = /อาชีพ|งาน|ทำงาน/.test(userText);
+      const wantFees   = /ค่าเทอม|ค่าใช้จ่าย|ทุน/.test(userText);
+      const wantCourse = /วิชา|การเรียน|หน่วยกิต/.test(userText);
+
+      let prompt;
+      if (wantFees) {
+        prompt = "ผู้ใช้ถามเรื่องค่าเทอมเปรียบเทียบทุกสาขา FIET ให้บอกตรงๆ ว่าไม่มีข้อมูลค่าเทอมในเอกสาร และแนะนำให้ติดต่อคณะ FIET KMUTT โดยตรงเพื่อขอข้อมูลล่าสุด";
+      } else if (wantCareer) {
+        prompt = "เปรียบเทียบอาชีพหลังสำเร็จการศึกษาของทุกสาขา FIET ทั้ง 8 สาขา ตอบเป็น bullet สาขาละ 1 บรรทัด สั้นกระชับ";
+      } else if (wantCourse) {
+        prompt = "เปรียบเทียบเนื้อหาการเรียนของทุกสาขา FIET ทั้ง 8 สาขา ตอบเป็น bullet สาขาละ 1 บรรทัด เน้นจุดต่างของแต่ละสาขา";
+      } else {
+        prompt = "ผู้ใช้ต้องการเปรียบเทียบภาพรวมทุกสาขา FIET ให้ตอบแบ่งเป็น 2 กลุ่ม (ค.อ.บ. และ ทล.บ.) สาขาละ 1 บรรทัดบอกจุดเด่น แล้วถามว่าอยากเจาะลึกด้านไหน (อาชีพ / เนื้อหาการเรียน / สาขาใดสาขาหนึ่ง)";
+      }
+      const overview = getComparisonOverview();
+      let replyText;
+      try { replyText = await askAI(prompt, userId); }
+      catch (err) { replyText = "⚠️ AI ขัดข้องชั่วคราว ลองใหม่นะครับ 🙏"; }
+      // ถ้า AI ตอบสั้นเกินไปหรือไม่มีเนื้อหา fallback ไปใช้ข้อมูล static
+      if (!replyText || replyText.length < 50) {
+        replyText = "เปรียบเทียบ 8 สาขา FIET 📊\n\nกลุ่ม ค.อ.บ. (ครูช่าง):\n- MTE เครื่องกล, ETE ไฟฟ้า, CTE โยธา, IED อุตสาหการ, ECT สื่อสารการศึกษา\n\nกลุ่ม ทล.บ. (เทคโนโลยี):\n- PPT การพิมพ์, CIT คอมพิวเตอร์, ITE อุตสาหกรรม\n\nอยากเจาะลึกด้านไหนครับ? (อาชีพ / เนื้อหาการเรียน / สาขาใดสาขาหนึ่ง)";
+      }
+      await sendLine(event.replyToken, [withQuickReply(textMsg(replyText))]);
+      return;
+    }
+
+    // ── สำรวจเพิ่มเติม: "มีไรอีกน่าสนใจ" / "อยากรู้เรื่องอื่น" ──────────────
+    if (
+      userText.includes("มีไรอีก") ||
+      userText.includes("อะไรอีก") ||
+      userText.includes("น่าสนใจอีก") ||
+      userText.includes("เรื่องอื่น") ||
+      userText.includes("หัวข้ออื่น") ||
+      userText.includes("นอกจากนี้") ||
+      (userText.includes("น่าสนใจ") && userText.includes("อีก"))
+    ) {
+      const topProgram = getTopProgram(userId);
+      const history    = userId ? getGroqHistory(userId) : [];
+      const seenCodes  = [...new Set(
+        history.filter(m => m.role === "user")
+               .map(m => detectMajorKey(m.content))
+               .filter(Boolean)
+      )];
+      const unseen = Object.keys(majorMap).filter(c => !seenCodes.includes(c));
+
+      let prompt;
+      if (seenCodes.length > 0) {
+        const seenNames = seenCodes.map(c => `${c} (${majorMap[c].split(" ")[0]})`).join(", ");
+        const unseenSample = unseen.slice(0, 3).map(c => `${c}`).join(", ");
+        prompt = `ผู้ใช้เคยถามเรื่อง ${seenNames} แล้ว ตอนนี้อยากรู้ว่า "มีไรอีกน่าสนใจ" ใน FIET\nให้แนะนำสาขาอื่นที่ยังไม่ได้คุย (เช่น ${unseenSample}) สั้นๆ สาขาละ 1 บรรทัด ไม่เกิน 3 สาขา แล้วถามว่าสนใจสาขาไหน`;
+      } else {
+        prompt = `ผู้ใช้ถามว่า "มีไรน่าสนใจ" ใน FIET ให้แนะนำ 3 สาขาที่น่าสนใจ สาขาละ 1 บรรทัด แล้วถามว่าสนใจสาขาไหน`;
+      }
+      let replyText;
+      try { replyText = await askAI(prompt, userId); }
+      catch (err) { replyText = "⚠️ AI ขัดข้องชั่วคราว ลองใหม่นะครับ 🙏"; }
+      await sendLine(event.replyToken, [withQuickReply(textMsg(replyText))]);
+      return;
+    }
+
+    // ── แนะนำสาขา: "ไปต่อสายไหนดี" ──────────────────────────────────────────
+    if (
+      userText === "ไปต่อสายไหนดี" ||
+      userText === "แนะนำสาขา" ||
+      userText === "ช่วยเลือกสาขา" ||
+      userText.includes("ต่อสายไหนดี") ||
+      userText.includes("เลือกสาขาอะไรดี")
+    ) {
+      const topProgram = getTopProgram(userId);
+      const turnCount  = getTurnCount(userId);
+      let prompt;
+      if (topProgram && turnCount >= 2) {
+        prompt = `ผู้ใช้ถามว่า "ไปต่อสายไหนดี" จากการสนทนา ดูเหมือนสนใจสาขา ${topProgram} (${majorMap[topProgram]}) ให้สรุปสั้นๆ ว่าสาขานี้เหมาะกับคนแบบไหน แล้วถามถึงพื้นฐานหรือเป้าหมายอาชีพของผู้ใช้`;
+      } else {
+        prompt = `ผู้ใช้ถามว่า "ไปต่อสายไหนดี" ให้แนะนำว่า FIET มี 8 สาขา แต่ละสาขาเหมาะกับความสนใจต่างกัน แล้วถามว่าผู้ใช้ชอบด้านไหน หรือมีพื้นฐานด้านอะไรมาก่อน`;
+      }
+      let replyText;
+      try { replyText = await askAI(prompt, userId); }
+      catch (err) { replyText = "⚠️ AI ขัดข้องชั่วคราว ลองใหม่นะครับ 🙏"; }
+      await sendLine(event.replyToken, [withQuickReply(textMsg(replyText))]);
+      return;
+    }
+
+    // ── ตรวจความสับสน: ถ้า user งง/ถามซ้ำ → ให้บอทสรุป ──────────────────────
+    const confused = userId ? detectConfusion(userId, userText) : false;
+
     // ── Groq ตอบหลัก ─────────────────────────────────────────────────────────
     let replyText;
     try {
-      replyText = await askAI(userText);
+      replyText = await askAI(userText, userId, confused);
     } catch (err) {
       console.error("[groq]", err.message);
       replyText = "⚠️ AI ขัดข้องชั่วคราว ลองใหม่อีกครั้งนะครับ 🙏";
