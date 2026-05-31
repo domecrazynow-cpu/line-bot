@@ -215,8 +215,9 @@ async function askAI(userMsg, userId = null, isConfused = false) {
 
   const fullContext = [context, ragContext].filter(Boolean).join("\n\n---\n\n");
 
-  // ── เรียก Groq (พร้อม history) ────────────────────────────────────────────
-  const reply = await askGroq(finalMsg, fullContext || null, profileContext, history);
+  // ── เรียก Groq — turn แรกของ session = 70b (quality), follow-up = 8b (save tokens)
+  const isFollowUp = history.length > 0;
+  const reply = await askGroq(finalMsg, fullContext || null, profileContext, history, isFollowUp);
 
   // ── บันทึก turn ลง session ────────────────────────────────────────────────
   if (userId) {
@@ -648,16 +649,41 @@ app.post("/webhook", requireLineSignature, async (req, res) => {
   )));
 });
 
+// ── Ollama: pull chat model ตอน startup (background) ─────────────────────────
+async function ensureOllamaChatModel() {
+  const OLLAMA_URL   = process.env.OLLAMA_URL   || "http://localhost:11434";
+  const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "qwen2.5:3b";
+  try {
+    // ตรวจสอบว่า model มีอยู่แล้วหรือยัง
+    const { data } = await axios.get(`${OLLAMA_URL}/api/tags`, { timeout: 5000 });
+    const exists = (data.models || []).some(m => m.name.startsWith(OLLAMA_MODEL.split(":")[0]));
+    if (exists) {
+      console.log(`[ollama] model ${OLLAMA_MODEL} ready ✓`);
+      return;
+    }
+    // ยังไม่มี → pull (ใช้เวลาสักครู่)
+    console.log(`[ollama] pulling ${OLLAMA_MODEL} (fallback model)...`);
+    await axios.post(`${OLLAMA_URL}/api/pull`, { name: OLLAMA_MODEL }, { timeout: 300000 });
+    console.log(`[ollama] ${OLLAMA_MODEL} pulled ✓`);
+  } catch (err) {
+    console.warn(`[ollama] model check failed: ${err.message}`);
+  }
+}
+
 // ── Startup ───────────────────────────────────────────────────────────────────
 app.listen(PORT, async () => {
   console.log(`🚀 Server running on :${PORT}`);
   console.log(`   Admin  → http://localhost:${PORT}/admin`);
   console.log(`   Team   → http://localhost:${PORT}/team`);
   console.log(`   LIFF   → http://localhost:${PORT}/liff`);
-  console.log(`   AI     → ${process.env.AI_PROVIDER || "groq"}`);
-  if (!LINE_TOKEN)              console.log("   ⚠️  LINE_TOKEN not set");
-  if (!LIFF_ID)                 console.log("   ⚠️  LIFF_ID not set");
+  console.log(`   AI     → ${process.env.AI_PROVIDER || "groq → ollama fallback"}`);
+  if (!LINE_TOKEN)               console.log("   ⚠️  LINE_TOKEN not set");
+  if (!LIFF_ID)                  console.log("   ⚠️  LIFF_ID not set");
   if (!process.env.GROQ_API_KEY) console.log("   ⚠️  GROQ_API_KEY not set");
+
+  // ตรวจ/pull ollama fallback model หลังจาก 15 วินาที (รอ network พร้อม)
+  setTimeout(() => ensureOllamaChatModel().catch(() => {}), 15000);
+
   if (LINE_TOKEN && LIFF_ID) {
     console.log("   🎨 สร้าง Rich Menu...");
     await setupRichMenu();

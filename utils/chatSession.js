@@ -1,5 +1,5 @@
 // utils/chatSession.js — จำการสนทนาต่อเนื่อง + ตรวจความสับสน + timeout
-const MAX_TURNS        = 6;           // จำ 6 คู่ (user+bot) = 12 messages
+const MAX_TURNS        = 3;           // จำ 3 คู่ = 6 messages (~150 tokens)
 const SESSION_TIMEOUT  = 15 * 60 * 1000;  // 15 นาที
 
 // sessions[userId] = { messages: [], lastActive: ts, start: ts }

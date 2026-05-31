@@ -7,9 +7,9 @@ const EMBED_PROVIDER = process.env.EMBED_PROVIDER || "ollama";
 const JINA_API_KEY   = process.env.JINA_API_KEY;
 const EMBED_MODEL    = "nomic-embed-text";
 const COLLECTION     = "knowledge";
-const TOP_K           = 8;    // ลดจาก 10 — บอทได้ context น้อยลง ตอบกระชับขึ้น
+const TOP_K           = 5;    // 5 chunks — balance quality/token
 const SCORE_THRESHOLD = 0.3;
-const MAX_CONTEXT     = 4000; // ลดจาก 8000 — บีบให้บอทไม่ dump ทุกอย่าง
+const MAX_CONTEXT     = 1500; // ~375 tokens — พอสำหรับตอบ 3 bullet และมีรายละเอียด
 
 // ── Embedding cache (in-memory) ────────────────────────────────────────────────
 const embedCache = new Map();

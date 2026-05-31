@@ -111,34 +111,26 @@ function getTopProgram(userId) {
 }
 
 /**
- * สร้าง context สรุปโปรไฟล์สำหรับฉีดเข้า system prompt
+ * สร้าง profile context แบบกระชับ (~20 tokens)
  * @returns {string|null}
  */
 function buildProfileContext(userId) {
   const p = getProfile(userId);
-  if (p.msgCount === 0) return null;
+  if (p.msgCount < 2) return null; // ยังถามน้อย ไม่ส่ง profile
 
   const topProgram = getTopProgram(userId);
   const topTopics  = Object.entries(p.topics)
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
+    .slice(0, 2)
     .map(([k]) => TOPIC_LABELS[k] || k);
 
   if (!topProgram && !topTopics.length) return null;
 
-  const lines = ["[โปรไฟล์ผู้ใช้]"];
-  if (topProgram) {
-    lines.push(`- สาขาที่สนใจมากที่สุด: ${topProgram} (${MAJOR_NAMES[topProgram] || topProgram})`);
-  }
-  if (p.lastProgram && p.lastProgram !== topProgram) {
-    lines.push(`- ถามล่าสุดเกี่ยวกับ: ${p.lastProgram} (${MAJOR_NAMES[p.lastProgram] || p.lastProgram})`);
-  }
-  if (topTopics.length) {
-    lines.push(`- หัวข้อที่สนใจ: ${topTopics.join(", ")}`);
-  }
-  lines.push(`- จำนวนการสอบถาม: ${p.msgCount} ครั้ง`);
-
-  return lines.join("\n");
+  // รูปแบบสั้น: "[โปรไฟล์] ETE อาชีพ/รายวิชา"
+  const parts = [];
+  if (topProgram) parts.push(topProgram);
+  if (topTopics.length) parts.push(topTopics.join("/"));
+  return `[โปรไฟล์] ${parts.join(" ")}`;
 }
 
 module.exports = { getProfile, updateProfile, getTopProgram, buildProfileContext };

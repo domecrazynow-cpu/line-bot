@@ -1,154 +1,193 @@
 // utils/groq.js
-const Groq = require("groq-sdk");
+const Groq  = require("groq-sdk");
+const axios = require("axios");
 
-const groq  = new Groq({ apiKey: process.env.GROQ_API_KEY });
-const MODEL = "llama-3.3-70b-versatile";
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
+const MODEL_70B    = "llama-3.3-70b-versatile";  // 100K TPD
+const MODEL_8B     = "llama-3.1-8b-instant";      // 500K TPD
+const OLLAMA_URL   = process.env.OLLAMA_URL   || "http://localhost:11434";
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "qwen2.5:3b";
+
+// ── System Prompt ─────────────────────────────────────────────────────────────
 const SYSTEM_PROMPT = process.env.SYSTEM_PROMPT ||
-  "คุณเป็นผู้ช่วยให้ข้อมูลหลักสูตรของคณะครุศาสตร์อุตสาหกรรมและเทคโนโลยี (FIET) มหาวิทยาลัยเทคโนโลยีพระจอมเกล้าธนบุรี (KMUTT)\n" +
-  "มี 8 สาขา: MTE (เครื่องกล), ETE (ไฟฟ้า), CTE (โยธา), IED (อุตสาหการ), PPT (การพิมพ์), ECT (สื่อสารการศึกษา), CIT (คอมพิวเตอร์), ITE (เทคโนโลยีอุตสาหกรรม)\n" +
+  "คุณคือน้องบอทของ FIET KMUTT พูดแบบเป็นกันเอง ภาษาไทยกระชับ\n" +
+  "8 สาขา: MTE(เครื่องกล) ETE(ไฟฟ้า) CTE(โยธา) IED(อุตสาหการ) PPT(การพิมพ์) ECT(สื่อสารการศึกษา) CIT(คอมพิวเตอร์) ITE(อุตสาหกรรม)\n" +
   "\n" +
-  "กฎภาษาและรูปแบบ (ห้ามละเมิด):\n" +
-  "- ใช้ภาษาไทยและภาษาอังกฤษเท่านั้น ห้ามตัวอักษรจีน/ญี่ปุ่น/เกาหลี\n" +
-  "- ห้ามใช้ ** ## _ หรือ markdown ใดๆ เด็ดขาด เพราะ LINE ไม่รองรับ\n" +
-  "- bullet ใช้ - นำหน้า เท่านั้น\n" +
-  "\n" +
-  "ข้อมูลที่ต้องข้ามเสมอ (ทุกสาขามีเหมือนกัน ไม่มีคุณค่าในการบอก):\n" +
-  "- ซื่อสัตย์สุจริต / เอื้อเฟื้อเผื่อแผ่ / จิตสาธารณะ / คุณธรรม จริยธรรม\n" +
-  "- ประโยคที่ขึ้นต้นว่า 'มุ่งผลิตบัณฑิตที่มีคุณภาพ' (boilerplate ที่ทุกหลักสูตรใช้)\n" +
-  "\n" +
-  "กฎการตอบ (เข้มงวด):\n" +
-  "1. ตอบสั้น เน้นสิ่งที่ทำให้สาขานี้ต่างจากสาขาอื่น ไม่ใช่สิ่งที่ทุกสาขามีเหมือนกัน\n" +
-  "2. ถามภาพรวม → bullet สูงสุด 3 ข้อ แต่ละข้อ 1 บรรทัด ห้ามเกินนี้\n" +
-  "3. ถามเฉพาะ → ตอบตรงประเด็น 2-3 ประโยคสั้น\n" +
-  "4. ถ้ามีข้อมูลเยอะ → บอกแค่ประเด็นหลัก แล้วถามว่าอยากรู้ส่วนไหนเพิ่ม\n" +
-  "5. ถ้ามี [โปรไฟล์ผู้ใช้] → ปรับให้ตรงสาขา/หัวข้อที่สนใจ\n" +
-  "6. ถ้า [ผู้ใช้ดูสับสน] → ทวนสรุปสั้นๆ แล้วถามให้ชัดว่าต้องการอะไร\n" +
-  "7. หลังตอบ → ถามต่อ 1 คำถามสั้น เช่น 'อยากรู้เรื่องอะไรเพิ่มครับ?'\n" +
-  "8. ตอบต้องจบประโยคเสมอ ห้ามตัดกลางคัน ถ้าจะยาวให้ตัดให้สั้นลงก่อนจบ\n" +
-  "9. ห้ามปนข้อมูลสาขาอื่น เช่น ถ้าถามเรื่อง ECT ห้ามบอกข้อมูล PPT หรือสาขาอื่นปะปน\n" +
-  "10. ถามต่อท้ายได้ 1 คำถามเท่านั้น ห้ามถาม 2 คำถามในประโยคเดียวกัน\n" +
-  "11. ห้ามแต่งตัวเลข: ค่าเทอม หน่วยกิต เกณฑ์เกรด คะแนนขั้นต่ำ — ถ้าไม่มีในเอกสารให้บอกว่าไม่มีและแนะนำติดต่อคณะ\n" +
-  "12. ห้ามแต่งข้อมูลอื่นๆ ถ้าไม่รู้ให้บอกตรงๆ\n" +
-  "13. emoji 1 ตัวพอ";
+  "วิธีตอบ:\n" +
+  "- bullet - สูงสุด 3 ข้อ เน้นจุดที่ต่างจากสาขาอื่น ไม่ต้องบอกทุกอย่างในครั้งเดียว\n" +
+  "- ถ้ามีประวัติการสนทนา → อ้างอิงที่คุยมาและเชื่อมต่อกับคำตอบใหม่ เช่น 'จากที่ถาม ETE มาแล้ว...'\n" +
+  "- ถามต่อแบบเจาะจงตาม context ที่คุยกัน ไม่ถามกว้างๆ ว่า 'อยากรู้อะไรเพิ่ม?'\n" +
+  "  ตัวอย่าง: 'อยากเทียบ ETE กับ CIT ไหมครับ?' / 'สนใจด้านอาชีพหรือรายวิชาครับ?'\n" +
+  "- ถ้ามี[โปรไฟล์]ให้ตอบตรงความสนใจและแนะนำต่อยอด\n" +
+  "- ถ้า[สับสน]ให้ทวนสั้นๆ ว่าคุยอะไรมาบ้าง แล้วถามให้ชัด\n" +
+  "ห้าม: markdown(**##) / ปนข้อมูลสาขาอื่น / แต่งตัวเลข(ค่าเทอม/หน่วยกิต) / ตัดกลางประโยค\n" +
+  "emoji 1 ตัวท้ายคำถาม";
 
-// ── คำแปลสำรองสำหรับตัวอักษรจีนที่พบบ่อย ─────────────────────────────────────
-const CJK_REPLACEMENTS = [
-  [/社会/g, "สังคม"],
-  [/经济/g, "เศรษฐกิจ"],
-  [/教育/g, "การศึกษา"],
-  [/技术/g, "เทคโนโลยี"],
-  [/发展/g, "การพัฒนา"],
-  [/国家/g, "ประเทศ"],
-  [/学生/g, "นักศึกษา"],
-  [/课程/g, "หลักสูตร"],
+// ── Response cache ────────────────────────────────────────────────────────────
+const _cache = new Map();
+const CACHE_TTL = 3 * 60 * 1000;
+
+function getCached(key) {
+  const hit = _cache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.ts > CACHE_TTL) { _cache.delete(key); return null; }
+  return hit.val;
+}
+function setCache(key, val) {
+  if (_cache.size >= 200) _cache.delete(_cache.keys().next().value);
+  _cache.set(key, { val, ts: Date.now() });
+}
+
+// ── CJK sanitizer ─────────────────────────────────────────────────────────────
+const CJK_MAP = [
+  [/社会/g,"สังคม"],[/经济/g,"เศรษฐกิจ"],[/教育/g,"การศึกษา"],
+  [/技术/g,"เทคโนโลยี"],[/发展/g,"การพัฒนา"],[/国家/g,"ประเทศ"],
+  [/学生/g,"นักศึกษา"],[/课程/g,"หลักสูตร"],
 ];
-
-/**
- * กรองอักษรที่ไม่ใช่ไทย/อังกฤษ/เครื่องหมายทั่วไปออกจาก response
- */
 function sanitizeResponse(text) {
-  let result = text;
-  // แทนที่คำจีนที่รู้จักก่อน
-  for (const [pattern, replacement] of CJK_REPLACEMENTS) {
-    result = result.replace(pattern, replacement);
-  }
-  // ลบตัวอักษร CJK ที่เหลือ (U+4E00–U+9FFF, U+3000–U+303F, U+FF00–U+FFEF)
-  result = result.replace(/[　-〿一-鿿＀-￯぀-ゟ゠-ヿ가-힯]/g, "");
-  // ลบช่องว่างซ้อน
-  result = result.replace(/  +/g, " ").replace(/ ([,.!?])/g, "$1");
-  return result.trim();
+  let r = text;
+  for (const [p, s] of CJK_MAP) r = r.replace(p, s);
+  r = r.replace(/[　-〿一-鿿＀-￯぀-ゟ゠-ヿ가-힯]/g, "");
+  return r.replace(/  +/g, " ").trim();
 }
 
+// ── Groq call ─────────────────────────────────────────────────────────────────
+async function _groqCall(model, messages, maxTok) {
+  const res = await groq.chat.completions.create({
+    model, messages, temperature: 0.4, max_tokens: maxTok,
+  });
+  return res.choices[0].message.content;
+}
+
+// ── Ollama fallback ───────────────────────────────────────────────────────────
+async function _ollamaCall(messages, maxTok) {
+  const res = await axios.post(
+    `${OLLAMA_URL}/api/chat`,
+    { model: OLLAMA_MODEL, messages, stream: false,
+      options: { num_predict: maxTok, temperature: 0.4 } },
+    { timeout: 60000 }
+  );
+  return res.data.message.content;
+}
+
+// ── Main: Groq → Ollama fallback เมื่อ 429 ───────────────────────────────────
 /**
- * @param {string}   userMsg
- * @param {string|null} kbContext      - ข้อมูลจาก RAG / fallback
- * @param {string|null} profileContext - โปรไฟล์ user จาก userProfile.js
- * @param {Array}    history           - [{role,content}] conversation history
+ * @param {string}      userMsg
+ * @param {string|null} kbContext
+ * @param {string|null} profileContext
+ * @param {Array}       history        - [{role,content}] max 6 messages
+ * @param {boolean}     isFollowUp     - true = 8b, false = 70b
  */
-async function askGroq(userMsg, kbContext, profileContext = null, history = []) {
-  let systemFull = SYSTEM_PROMPT;
-
-  if (profileContext) {
-    systemFull += "\n\n" + profileContext;
+async function askGroq(userMsg, kbContext, profileContext = null, history = [], isFollowUp = false) {
+  // cache
+  const canCache = !profileContext && history.length === 0;
+  const cacheKey = canCache ? `${userMsg.slice(0,80)}|${(kbContext||"").slice(0,40)}` : null;
+  if (cacheKey) {
+    const hit = getCached(cacheKey);
+    if (hit) { console.log("[groq] cache hit"); return hit; }
   }
 
-  if (kbContext) {
-    systemFull += "\n\n---\nข้อมูลจากเอกสารหลักสูตรและฐานความรู้:\n" + kbContext + "\n---";
-  }
+  // build messages
+  let sys = SYSTEM_PROMPT;
+  if (profileContext) sys += "\n" + profileContext;
+  if (kbContext)      sys += "\n---\n" + kbContext.slice(0, 1500) + "\n---";
 
-  // history มากขึ้น → ลด max_tokens เพื่อไม่เกิน context window
-  const maxTok = history.length >= 8 ? 700 : 900;
+  const messages = [
+    { role: "system", content: sys },
+    ...history.slice(-6),
+    { role: "user", content: userMsg },
+  ];
 
-  const completion = await groq.chat.completions.create({
-    model: MODEL,
-    messages: [
-      { role: "system", content: systemFull },
-      ...history,
-      { role: "user",   content: userMsg },
-    ],
-    temperature: 0.3,
-    max_tokens: maxTok,
-  });
-  return sanitizeResponse(completion.choices[0].message.content);
-}
+  const model  = isFollowUp ? MODEL_8B : MODEL_70B;
+  const maxTok = isFollowUp ? 350 : 450;
 
-async function generateTripPlan({ province, area, mood, budget, days, weather, people, festival, extra, lat, lng }) {
-  const locationContext = (lat && lng) ? "\nพิกัด GPS: " + lat + ", " + lng : "";
-  const prompt = "สร้างแผนเที่ยวดังนี้:\n" +
-    "- จังหวัด: " + province + "\n" +
-    "- พื้นที่/อำเภอ: " + (area || "ทั่วจังหวัด") + "\n" +
-    "- อารมณ์/สไตล์: " + mood + "\n" +
-    "- งบประมาณ: " + budget + " บาท/คน\n" +
-    "- จำนวนวัน: " + days + " วัน\n" +
-    "- จำนวนคน: " + people + " คน\n" +
-    "- สภาพอากาศ: " + weather + "\n" +
-    "- เทศกาล/โอกาส: " + (festival || "ทั่วไป") + "\n" +
-    (extra ? "- ความต้องการพิเศษ: " + extra + "\n" : "") +
-    locationContext + "\n\n" +
-    "กรุณาสร้างแผนเที่ยวที่:\n" +
-    "1. แนะนำสถานที่ที่ไม่ค่อยมีคนรู้จัก (hidden gems) เป็นหลัก\n" +
-    "2. จัดตารางเวลาแต่ละวันชัดเจน เช้า/กลางวัน/เย็น/ค่ำ\n" +
-    "3. แนะนำร้านอาหารอร่อยในพื้นที่\n" +
-    "4. บอกงบประมาณโดยประมาณแต่ละกิจกรรม\n" +
-    "5. แนะนำการเดินทาง รถเมล์/รถสองแถว/ระยะทาง\n" +
-    "6. เตือนสิ่งที่ควรระวังตามสภาพอากาศ\n" +
-    "7. แนะนำโทรเช็คก่อนไปทุกครั้ง เผื่อข้อมูลเปลี่ยน";
-
-  const completion = await groq.chat.completions.create({
-    model: MODEL,
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      { role: "user",   content: prompt }
-    ],
-    temperature: 0.7,
-    max_tokens: 2048,
-  });
-  return completion.choices[0].message.content;
-}
-
-async function findNearbyEventsGroq(location) {
-  const today = new Date().toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" });
-  const prompt = "ค้นหาอีเวนท์ งาน เทศกาล หรือกิจกรรมพิเศษที่น่าจะเกิดขึ้น\n" +
-    "บริเวณ: " + location + "\n" +
-    "วันที่อ้างอิง: " + today + "\n\n" +
-    'ตอบในรูปแบบ JSON array เท่านั้น ห้ามมีข้อความอื่น:\n' +
-    '[{"title":"ชื่ออีเวนท์","description":"รายละเอียด","date":"วันที่","location":"สถานที่","registerUrl":null}]\n' +
-    "ถ้าไม่มีอีเวนท์ที่แน่ใจ ให้ return [] เท่านั้น ห้ามแต่งข้อมูล";
-
+  let text;
   try {
-    const completion = await groq.chat.completions.create({
-      model: MODEL,
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.3,
-      max_tokens: 512,
-    });
-    const text  = completion.choices[0].message.content;
-    const clean = text.replace(/```json|```/g, "").trim();
-    return JSON.parse(clean);
-  } catch {
-    return [];
+    // 1. ลอง Groq ก่อน
+    text = await _groqCall(model, messages, maxTok);
+    console.log(`[groq] ok (${model.includes("70b") ? "70b" : "8b"})`);
+  } catch (err) {
+    const isRateLimit = err?.status === 429 ||
+      err?.error?.code === "rate_limit_exceeded";
+
+    if (isRateLimit) {
+      // 2. Groq หมด → ลอง model อื่นใน Groq ก่อน (8b มี quota ต่างกัน)
+      if (!isFollowUp) {
+        try {
+          text = await _groqCall(MODEL_8B, messages, maxTok);
+          console.log("[groq] 70b limited → 8b ok");
+        } catch (err2) {
+          if (err2?.status === 429) {
+            console.warn("[groq] both models limited → ollama");
+            text = await _ollamaCall(messages, maxTok);
+            console.log("[ollama] fallback ok");
+          } else throw err2;
+        }
+      } else {
+        // 8b ก็หมด → Ollama
+        console.warn("[groq] 8b limited → ollama");
+        text = await _ollamaCall(messages, maxTok);
+        console.log("[ollama] fallback ok");
+      }
+    } else {
+      throw err;
+    }
   }
+
+  const reply = sanitizeResponse(text);
+  if (cacheKey) setCache(cacheKey, reply);
+  return reply;
+}
+
+// ── Trip plan ─────────────────────────────────────────────────────────────────
+async function generateTripPlan({ province, area, mood, budget, days, weather, people, festival, extra, lat, lng }) {
+  const loc    = (lat && lng) ? `พิกัด:${lat},${lng} ` : "";
+  const prompt =
+    `แผนเที่ยว จ.${province} ${area||""} สไตล์:${mood} งบ:${budget}บ./คน ` +
+    `${days}วัน ${people}คน อากาศ:${weather} ${festival||""} ${extra||""} ${loc}` +
+    `\nตาราง เช้า/กลางวัน/เย็น/ค่ำ hidden gems ร้านอาหาร งบต่อกิจกรรม การเดินทาง`;
+
+  let text;
+  try {
+    text = (await groq.chat.completions.create({
+      model: MODEL_70B,
+      messages: [
+        { role: "system", content: "วางแผนเที่ยวไทย ตอบไทย ไม่ใช้ markdown" },
+        { role: "user",   content: prompt },
+      ],
+      temperature: 0.7, max_tokens: 1200,
+    })).choices[0].message.content;
+  } catch (err) {
+    if (err?.status === 429) {
+      const res = await axios.post(`${OLLAMA_URL}/api/chat`, {
+        model: OLLAMA_MODEL, stream: false,
+        messages: [
+          { role: "system", content: "วางแผนเที่ยวไทย ตอบไทย" },
+          { role: "user",   content: prompt },
+        ],
+        options: { num_predict: 1200 },
+      }, { timeout: 90000 });
+      text = res.data.message.content;
+    } else throw err;
+  }
+  return text;
+}
+
+// ── Find events ───────────────────────────────────────────────────────────────
+async function findNearbyEventsGroq(location) {
+  const today = new Date().toLocaleDateString("th-TH", { year:"numeric", month:"long", day:"numeric" });
+  try {
+    const res = await groq.chat.completions.create({
+      model: MODEL_8B,
+      messages: [{ role:"user", content:
+        `อีเวนท์บริเวณ ${location} วันที่ ${today} ` +
+        `JSON:[{"title":"","description":"","date":"","location":"","registerUrl":null}] ถ้าไม่แน่ใจ return []`
+      }],
+      temperature: 0.2, max_tokens: 200,
+    });
+    return JSON.parse(res.choices[0].message.content.replace(/```json|```/g,"").trim());
+  } catch { return []; }
 }
 
 module.exports = { askGroq, generateTripPlan, findNearbyEventsGroq, SYSTEM_PROMPT };
