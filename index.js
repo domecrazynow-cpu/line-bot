@@ -91,14 +91,15 @@ const BRANCHES = {
   ITE: "เทคโนโลยีอุตสาหกรรม (Industrial Technology)",
 };
 const majorAliases = [
-  { code: "MTE", terms: ["MTE", "ครูเครื่องกล", "เครื่องกล", "ครุศาสตร์เครื่องกล", "mechanical"] },
-  { code: "ETE", terms: ["ETE", "ครูไฟฟ้า", "ไฟฟ้า", "ครุศาสตร์ไฟฟ้า", "electrical"] },
-  { code: "CTE", terms: ["CTE", "ครูโยธา", "โยธา", "ครุศาสตร์โยธา", "civil"] },
+  { code: "MTE", terms: ["MTE", "ครูเครื่องกล", "ครุศาสตร์เครื่องกล", "mechanical technology education"] },
+  { code: "ETE", terms: ["ETE", "ครูไฟฟ้า", "ครุศาสตร์ไฟฟ้า", "electrical technology education", "ไฟฟ้ากำลัง", "วิศวกรรมไฟฟ้า"] },
+  { code: "CTE", terms: ["CTE", "ครูโยธา", "โยธา", "ครุศาสตร์โยธา", "civil technology education"] },
   { code: "IED", terms: ["IED", "IEd", "ครูอุต", "อุตสาหการ", "ครุศาสตร์อุตสาหการ", "industrial education"] },
-  { code: "PPT", terms: ["PPT", "การพิมพ์", "บรรจุภัณฑ์", "พิมพ์", "printing", "packaging"] },
-  { code: "ECT", terms: ["ECT", "สื่อสารการศึกษา", "เทคโนโลยีและสื่อสาร", "educational communications", "เทคโนโลยีดิจิทัล"] },
-  { code: "CIT", terms: ["CIT", "คอมพิวเตอร์", "computer", "เทคโนโลยีสารสนเทศ", "information technology", "มัลติมีเดีย", "multimedia"] },
-  { code: "ITE", terms: ["ITE", "เทคโนโลยีอุตสาหกรรม", "industrial technology", "ทล.บ"] },
+  { code: "PPT", terms: ["PPT", "การพิมพ์", "บรรจุภัณฑ์", "printing", "packaging"] },
+  { code: "ECT", terms: ["ECT", "สื่อสารการศึกษา", "เทคโนโลยีและสื่อสาร", "educational communications"] },
+  { code: "CIT", terms: ["CIT", "คอมพิวเตอร์", "computer", "เทคโนโลยีสารสนเทศ", "information technology", "มัลติมีเดีย"] },
+  { code: "ITE", terms: ["ITE", "เทคโนโลยีอุตสาหกรรม", "industrial technology"] },
+  // หมายเหตุ: ลบ "เครื่องกล","ไฟฟ้า","ทล.บ" ที่ ambiguous ออก (ป้องกัน false match)
 ];
 
 function detectMajorKey(text) {
@@ -181,6 +182,16 @@ async function askAI(userMsg, userId = null, isConfused = false) {
 
   // ── ถ้า user ดูสับสน → เติม instruction ก่อนคำถาม ────────────────────────
   let finalMsg = cleanMsg;
+  // Normalize branch code เป็น uppercase และเติม label ให้ Groq อ่านชัดเจน
+  if (majorKey) {
+    // แทน lowercase code เป็น uppercase (เช่น "ite" → "ITE", "ied" → "IED")
+    const codeRe = new RegExp(`\\b${majorKey}\\b`, "i");
+    const normalized = cleanMsg.replace(codeRe, majorKey);
+    // ถ้า code ยังไม่ชัด (เช่น alias ภาษาไทยอย่างเดียว) → เติม prefix
+    finalMsg = normalized.toUpperCase().includes(majorKey)
+      ? normalized
+      : `[สาขา ${majorKey}] ${normalized}`;
+  }
   if (isConfused && userId) {
     const pastQ = history
       .filter(m => m.role === "user").slice(-4)
@@ -192,16 +203,23 @@ async function askAI(userMsg, userId = null, isConfused = false) {
   const hits    = searchKnowledge(queryMsg);
   const context = buildContext(hits);
 
-  // ── RAG ───────────────────────────────────────────────────────────────────
+  // ── RAG — ค้นเฉพาะเมื่อระบุสาขา หรือเป็นคำถามเชิงเปรียบเทียบ/ทั่วไปจริงๆ
   let ragContext = null;
-  const ragReady = await isRAGReady();
+  const isGeneralQuery = !majorKey && (
+    cleanMsg.includes("เทียบ") || cleanMsg.includes("ทั้งหมด") ||
+    cleanMsg.includes("ภาพรวม") || cleanMsg.includes("สาขา") ||
+    cleanMsg.includes("FIET") || userMsg.length > 20  // ใช้ original length ก่อน slang expansion
+  );
 
-  if (ragReady) {
+  const ragReady = await isRAGReady();
+  if (ragReady && (majorKey || isGeneralQuery)) {
     ragContext = await searchRAG(queryMsg, majorKey || null);
     console.log("[rag] query:", queryMsg.slice(0, 80));
     console.log("[rag] program:", majorKey || "none", "| found:", !!ragContext, "| len:", ragContext?.length || 0);
-  } else {
+  } else if (!ragReady) {
     console.log("[rag] not ready");
+  } else {
+    console.log("[rag] skipped — no major, short/ambiguous query");
   }
 
   // ── Fallback เมื่อ RAG ไม่พบข้อมูล ───────────────────────────────────────
@@ -494,13 +512,16 @@ async function handleEvent(event) {
       return;
     }
 
-    // ── เปรียบเทียบสาขา ────────────────────────────────────────────────────────
-    const isCompareAll = (
+    // ── เปรียบเทียบสาขา ─────────────────────────────────────────────────────────
+    // ถ้ามีรหัสสาขา 2 ตัวขึ้นไปในข้อความ = เทียบเฉพาะสาขา (ไม่ใช่ทั้งหมด)
+    const branchCodesInMsg = Object.keys(majorMap).filter(c => userText.toUpperCase().includes(c));
+    const isSpecificCompare = branchCodesInMsg.length >= 2;
+    const isCompareAll = !isSpecificCompare && (
       userText === "เทียบทุกสาขา" ||
       userText === "เทียบกับทุกสาขา" ||
       userText === "เปรียบเทียบทุกสาขา" ||
       (userText.includes("เทียบ") && (userText.includes("ทุกสาขา") || userText.includes("ทุกหลักสูตร"))) ||
-      (userText.includes("เปรียบเทียบ") && userText.includes("สาขา"))
+      (userText.includes("เปรียบเทียบ") && userText.includes("สาขา") && !isSpecificCompare)
     );
     if (isCompareAll) {
       // ถ้าถามเฉพาะด้าน เช่น "เทียบอาชีพ" / "เทียบค่าเทอม"
@@ -584,6 +605,54 @@ async function handleEvent(event) {
       try { replyText = await askAI(prompt, userId); }
       catch (err) { replyText = "⚠️ AI ขัดข้องชั่วคราว ลองใหม่นะครับ 🙏"; }
       await sendLine(event.replyToken, [withQuickReply(textMsg(replyText))]);
+      return;
+    }
+
+    // ── Career intent: "ทำไรได้" / "ทำรได้" / "จบแล้วทำอะไร" ────────────────
+    const isCareerQ = (
+      userText.includes("ทำไรได้") ||
+      userText.includes("ทำรได้")   ||   // short-form ไม่มี ไ
+      userText.includes("ทำอะไรได้") ||
+      userText.includes("จบแล้วทำ") ||
+      userText.includes("จบทำไร")   ||
+      userText.includes("จบทำร")    ||   // short-form
+      userText.includes("ทำงานอะไร") ||
+      userText.includes("ทำงานอะไรได้") ||
+      userText.includes("อาชีพอะไร") ||
+      userText.includes("อาชีพได้") ||
+      (userText.includes("อาชีพ") && userText.length < 20)
+    );
+    if (isCareerQ) {
+      const majorKey = detectMajorKey(userText);
+      if (majorKey) {
+        // ถามอาชีพของสาขาที่ระบุ
+        const reply = await askAI(`อาชีพที่ทำได้หลังจบ ${majorKey} ${majorMap[majorKey]}`, userId);
+        await sendLine(event.replyToken, [withQuickReply(textMsg(reply))]);
+      } else {
+        // ไม่ระบุสาขา → ถามกลับ
+        await sendLine(event.replyToken, [withQuickReply(textMsg(
+          "สนใจอาชีพของสาขาไหนครับ? 😊\nกดเลือกด้านล่าง หรือพิมพ์ชื่อสาขาได้เลย"
+        ))]);
+      }
+      return;
+    }
+
+    // ── Ambiguous short query: ไม่ระบุสาขา + สั้นมาก → ถามให้ชัด ─────────────
+    const cleanedText = preprocessMessage(userText);
+    const hasNoBranch = !detectMajorKey(cleanedText);
+    const isVeryShort = cleanedText.length < 8;
+    const isAmbiguous = hasNoBranch && isVeryShort && !userText.includes("สวัสดี") && !userText.includes("ขอบคุณ");
+    if (isAmbiguous) {
+      const topProgram = getTopProgram(userId);
+      if (topProgram) {
+        // มี profile → ถามว่าถามเรื่องสาขาที่สนใจอยู่ไหม
+        const reply = await askAI(userText, userId);
+        await sendLine(event.replyToken, [withQuickReply(textMsg(reply))]);
+      } else {
+        await sendLine(event.replyToken, [withQuickReply(textMsg(
+          "ถามเรื่องสาขาไหนอยู่ครับ? 🤔\nหรือถามภาพรวม FIET เลยก็ได้"
+        ))]);
+      }
       return;
     }
 

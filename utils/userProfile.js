@@ -54,14 +54,22 @@ function detectTopics(text) {
     .map(({ key }) => key);
 }
 
+let _saveTimer = null;
 function saveProfiles() {
-  try {
-    const dir = path.dirname(DB_PATH);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(DB_PATH, JSON.stringify(profiles, null, 2));
-  } catch (e) {
-    console.error("[profile] save error:", e.message);
-  }
+  // debounce: รวม write หลายๆ ครั้งที่ใกล้กัน เป็น 1 ครั้ง (ทุก 2 วินาที)
+  if (_saveTimer) return;
+  _saveTimer = setTimeout(() => {
+    _saveTimer = null;
+    try {
+      const dir = path.dirname(DB_PATH);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFile(DB_PATH, JSON.stringify(profiles, null, 2), err => {
+        if (err) console.error("[profile] save error:", err.message);
+      });
+    } catch (e) {
+      console.error("[profile] save error:", e.message);
+    }
+  }, 2000);
 }
 
 function getProfile(userId) {

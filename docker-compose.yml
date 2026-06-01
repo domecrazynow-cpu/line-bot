@@ -63,6 +63,17 @@ services:
       timeout: 10s
       retries: 3
 
+  ngrok:
+    image: ngrok/ngrok:latest
+    restart: unless-stopped
+    command: http nginx:80 --log=stdout
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+    ports:
+      - "4040:4040"
+    depends_on:
+      - nginx
+
   watchdog:
     build:
       context: .

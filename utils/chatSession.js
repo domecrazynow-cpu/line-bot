@@ -69,12 +69,20 @@ function detectConfusion(userId, newMsg) {
   const userMsgs = s.messages.filter(m => m.role === "user").slice(-4).map(m => m.content);
   if (userMsgs.length < 2) return false;
 
-  const last = new Set(newMsg.replace(/\s+/g, " ").split(" ").filter(w => w.length > 1));
-  const prev = userMsgs[userMsgs.length - 1].replace(/\s+/g, " ").split(" ").filter(w => w.length > 1);
-  if (!last.size || !prev.length) return false;
-  const overlap = prev.filter(w => last.has(w)).length;
-  const sim = overlap / Math.max(last.size, prev.length);
-  return sim >= 0.6;
+  // ภาษาไทยไม่มี space → ใช้ trigram (3-char sliding window) แทน word-split
+  function trigramSet(text) {
+    const s = text.replace(/\s+/g, "");
+    const set = new Set();
+    for (let i = 0; i <= s.length - 3; i++) set.add(s.slice(i, i + 3));
+    return set;
+  }
+  const lastTri = trigramSet(newMsg);
+  const prevTri = trigramSet(userMsgs[userMsgs.length - 1]);
+  if (!lastTri.size || !prevTri.size) return false;
+  let overlap = 0;
+  for (const t of lastTri) if (prevTri.has(t)) overlap++;
+  const sim = overlap / Math.max(lastTri.size, prevTri.size);
+  return sim >= 0.5;
 }
 
 /**

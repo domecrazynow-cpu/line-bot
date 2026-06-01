@@ -81,15 +81,21 @@ async function searchRAG(query, program = null) {
 
     let results = res.data.result || [];
 
-    // ถ้ากรองตามสาขาแล้วได้น้อยกว่า 3 → ค้นใหม่แบบไม่กรอง
-    if (program && results.length < 3) {
-      console.log(`[rag] program filter returned ${results.length} — falling back to unfiltered`);
+    // fallback ไป unfiltered เฉพาะเมื่อ filtered results ไม่มีเลย หรือทุก result score ต่ำมาก
+    const bestFilteredScore = results[0]?.score || 0;
+    if (program && results.length < 3 && bestFilteredScore < SCORE_THRESHOLD) {
+      console.log(`[rag] program filter: ${results.length} results, best score ${bestFilteredScore.toFixed(3)} — trying unfiltered`);
       const res2 = await axios.post(
         `${QDRANT_URL}/collections/${COLLECTION}/points/search`,
         { vector, limit: TOP_K, with_payload: true },
         { timeout: 8000 }
       );
-      results = res2.data.result || [];
+      const unfiltered = res2.data.result || [];
+      // ใช้ unfiltered เฉพาะเมื่อดีกว่า filtered จริงๆ
+      if (!results.length || (unfiltered[0]?.score || 0) > bestFilteredScore + 0.1) {
+        results = unfiltered;
+        console.log(`[rag] switched to unfiltered (best: ${unfiltered[0]?.score?.toFixed(3)})`);
+      }
     }
 
     if (!results.length) return null;

@@ -492,12 +492,14 @@ function makeEventCarousel(events) {
 // ── Branch Carousel ───────────────────────────────────────────────────────────
 function makeBranchCarousel() {
   const branches = [
-    { code: "MTE", emoji: "⚙️", name: "ครุศาสตร์เครื่องกล", english: "Mechanical Technology Education", color: "#2563eb" },
-    { code: "ETE", emoji: "⚡", name: "ครุศาสตร์ไฟฟ้า", english: "Electrical Technology Education", color: "#f59e0b" },
-    { code: "CTE", emoji: "🏗️", name: "ครุศาสตร์โยธา", english: "Civil Technology Education", color: "#10b981" },
-    { code: "IEd", emoji: "🏭", name: "ครุศาสตร์อุตสาหการ", english: "Industrial Technology Education", color: "#ef4444" },
-    { code: "PPT", emoji: "🖨️", name: "เทคโนโลยีการพิมพ์และบรรจุภัณฑ์", english: "Printing and Packaging Technology", color: "#8b5cf6" },
-    { code: "ECT", emoji: "💻", name: "เทคโนโลยีและสื่อสารการศึกษา", english: "Educational Communications and Technology", color: "#06b6d4" },
+    { code: "MTE", emoji: "⚙️",  name: "ครุศาสตร์เครื่องกล",            english: "Mechanical Technology Education",          color: "#2563eb" },
+    { code: "ETE", emoji: "⚡",  name: "ครุศาสตร์ไฟฟ้า",                english: "Electrical Technology Education",          color: "#f59e0b" },
+    { code: "CTE", emoji: "🏗️", name: "ครุศาสตร์โยธา",                  english: "Civil Technology Education",               color: "#10b981" },
+    { code: "IED", emoji: "🏭",  name: "ครุศาสตร์อุตสาหการ",            english: "Industrial Technology Education",          color: "#ef4444" },
+    { code: "PPT", emoji: "🖨️", name: "เทคโนโลยีการพิมพ์และบรรจุภัณฑ์", english: "Printing and Packaging Technology",        color: "#8b5cf6" },
+    { code: "ECT", emoji: "📡",  name: "เทคโนโลยีและสื่อสารการศึกษา",   english: "Educational Communications and Technology", color: "#06b6d4" },
+    { code: "CIT", emoji: "💻",  name: "คอมพิวเตอร์และเทคโนโลยีสารสนเทศ", english: "Computer and Information Technology",     color: "#0ea5e9" },
+    { code: "ITE", emoji: "🔧",  name: "เทคโนโลยีอุตสาหกรรม",           english: "Industrial Technology",                    color: "#f97316" },
   ];
 
   const bubbles = branches.map(branch => ({

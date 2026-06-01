@@ -2,7 +2,7 @@
   "Ucf7fd895a78b0434730fc5dc47f1c201": {
     "programs": {
       "ETE": 2,
-      "PPT": 2,
+      "PPT": 3,
       "MTE": 1,
       "ECT": 3,
       "IED": 3,
@@ -10,14 +10,14 @@
       "CIT": 3
     },
     "topics": {
-      "curriculum": 15,
+      "curriculum": 17,
       "admission": 1,
-      "career": 1,
-      "courses": 1,
+      "career": 3,
+      "courses": 3,
       "fees": 1
     },
-    "lastProgram": "CIT",
-    "msgCount": 22,
-    "lastActive": "2026-05-31T18:16:24.497Z"
+    "lastProgram": "PPT",
+    "msgCount": 33,
+    "lastActive": "2026-06-01T15:19:35.206Z"
   }
 }
