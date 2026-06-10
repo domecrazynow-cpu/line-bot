@@ -14,10 +14,28 @@
       "admission": 1,
       "career": 3,
       "courses": 3,
-      "fees": 1
+      "fees": 2
     },
     "lastProgram": "PPT",
-    "msgCount": 33,
-    "lastActive": "2026-06-01T15:19:35.206Z"
+    "msgCount": 36,
+    "lastActive": "2026-06-01T16:05:42.803Z"
+  },
+  "U0eb472d6b5b2a0899dea04ab4ac4c47f": {
+    "programs": {
+      "MTE": 1,
+      "ETE": 1,
+      "CTE": 1,
+      "IED": 1,
+      "PPT": 1,
+      "ECT": 1,
+      "CIT": 1,
+      "ITE": 1
+    },
+    "topics": {
+      "curriculum": 8
+    },
+    "lastProgram": "ITE",
+    "msgCount": 11,
+    "lastActive": "2026-06-01T16:12:17.879Z"
   }
 }
